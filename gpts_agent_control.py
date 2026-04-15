@@ -42,11 +42,11 @@ LOCAL_URL = "http://127.0.0.1:8787"
 DEFAULT_WORKSPACE_ROOTS = (
     r"C:\Projects;D:\Workspace"
     if IS_WINDOWS
-    else "/Users/yurii.slepnev/Documents/Мои приложения:/workspace:/projects"
+    else "/workspace:/projects"
 )
 
 # --- Tunnel defaults ---
-DEFAULT_NGROK_DOMAIN = "pettiness-celery-garment.ngrok-free.dev"
+DEFAULT_NGROK_DOMAIN = "your-domain.ngrok-free.dev"
 TUNNEL_HEALTH_ATTEMPTS = 4
 TUNNEL_HEALTH_DELAY_SEC = 2.0
 TUNNEL_HEALTH_TIMEOUT_SEC = 6

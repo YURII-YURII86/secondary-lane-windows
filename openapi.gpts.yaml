@@ -3,7 +3,7 @@ info:
   title: Universal Flex Agent
   version: 3.1.0
 servers:
-  - url: https://pettiness-celery-garment.ngrok-free.dev
+  - url: https://your-domain.ngrok-free.dev
 components:
   schemas:
     SessionRecord:

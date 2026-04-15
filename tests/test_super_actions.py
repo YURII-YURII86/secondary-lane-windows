@@ -143,7 +143,7 @@ def test_ssh_exec_allows_ip_from_cidr_with_known_hosts(monkeypatch, tmp_path: Pa
     known_hosts = tmp_path / "known_hosts"
     known_hosts.write_text("dummy host key\n", encoding="utf-8")
     monkeypatch.setattr(main.settings, "ssh_allowed_hosts", [])
-    monkeypatch.setattr(main.settings, "ssh_allowed_cidrs", ["192.168.0.0/24"])
+    monkeypatch.setattr(main.settings, "ssh_allowed_cidrs", ["192.0.2.0/24"])
     monkeypatch.setattr(main.settings, "ssh_known_hosts_path", str(known_hosts))
 
     class _Stream:
@@ -183,7 +183,7 @@ def test_ssh_exec_allows_ip_from_cidr_with_known_hosts(monkeypatch, tmp_path: Pa
         "/v1/ssh/exec",
         headers=AUTH,
         json={
-            "host": "192.168.0.55",
+            "host": "192.0.2.55",
             "username": "tester",
             "password": "secret",
             "command": "echo ok",
@@ -421,7 +421,7 @@ def test_start_command_returns_controlled_error_for_missing_binary(monkeypatch, 
 
 def test_ssh_exec_rejects_when_no_known_hosts_loaded(monkeypatch, tmp_path: Path) -> None:
     _sandbox(monkeypatch, tmp_path)
-    monkeypatch.setattr(main.settings, "ssh_allowed_hosts", ["192.168.0.122"])
+    monkeypatch.setattr(main.settings, "ssh_allowed_hosts", ["192.0.2.122"])
     monkeypatch.setattr(main.settings, "ssh_allowed_cidrs", [])
     monkeypatch.setattr(main.settings, "ssh_known_hosts_path", str(tmp_path / "missing_known_hosts"))
 
@@ -452,7 +452,7 @@ def test_ssh_exec_rejects_when_no_known_hosts_loaded(monkeypatch, tmp_path: Path
         "/v1/ssh/exec",
         headers=AUTH,
         json={
-            "host": "192.168.0.122",
+            "host": "192.0.2.122",
             "username": "tester",
             "password": "secret",
             "command": "echo ok",

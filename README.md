@@ -24,18 +24,16 @@ See the Windows version in action before you read the setup:
 
 ## Screenshots
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="assets/screenshots/chat-view.png" alt="Second Lane chat view" width="100%">
-      <p><strong>Chat-driven workflow</strong><br>How the task moves inside the normal ChatGPT interface.</p>
-    </td>
-    <td width="50%" valign="top">
-      <img src="assets/screenshots/main-interface.png" alt="Second Lane main interface" width="100%">
-      <p><strong>Control panel and local runtime</strong><br>ChatGPT on one side, local execution layer on the other.</p>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="assets/screenshots/chat-view-showcase.png" alt="Second Lane chat workflow" width="49%">
+  <img src="assets/screenshots/main-interface-showcase.png" alt="Second Lane control panel and local runtime" width="49%">
+</p>
+
+<p align="center">
+  <sub><strong>Chat-driven workflow</strong> · The task moves inside the normal ChatGPT interface</sub>
+  <br>
+  <sub><strong>Control panel and local runtime</strong> · ChatGPT on one side, local execution layer on the other</sub>
+</p>
 
 ## Strongest Use Case
 

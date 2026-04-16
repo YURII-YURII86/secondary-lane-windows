@@ -1,6 +1,6 @@
-# Second Lane for Windows
+# Second Lane | Windows Version
 
-**Turn ChatGPT into a real coding agent. Local. Any language.**
+**Second lane for your vibe coding. Windows version.**
 
 Second Lane gives ChatGPT real actions on your machine: inspect code, patch files, run tests, start services, verify results, and keep project memory between sessions.
 

@@ -1,8 +1,10 @@
-# Second Lane | Windows Version
+# Second Lane | Версия для Windows
 
-**Second lane for your vibe coding. Windows version.**
+**Вторая полоса для твоего вайбкодинга.**
 
 Second Lane gives ChatGPT real actions on your machine: inspect code, patch files, run tests, start services, verify results, and keep project memory between sessions.
+
+**It is especially strong when Claude Code, Codex, or another coding agent hits limits, loses context, or just becomes inconvenient.**
 
 Built on official ChatGPT features: GPTs, Actions, instructions, and knowledge.
 
@@ -27,6 +29,18 @@ Closer look at the chat-driven workflow:
 Main working view with ChatGPT and the local control panel:
 
 ![Second Lane main interface](assets/screenshots/main-interface.png)
+
+## Strongest Use Case
+
+Second Lane is not just "ChatGPT that can read files".
+
+Its strongest job is to give you a second working lane when Claude Code, Codex, or another agent stalls:
+
+- **Continue after limits** instead of waiting for the next quota reset
+- **Pick up work after context loss** without restarting everything from zero
+- **Run real local actions through ChatGPT**: inspect, patch, run, verify
+- **Keep project memory between sessions** through `.ai_context/`
+- **Work from the normal ChatGPT interface** instead of a CLI-first flow
 
 ## Why People Use It
 

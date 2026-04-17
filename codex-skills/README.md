@@ -1,67 +1,52 @@
-# Codex Skills For Secondary LANE
+# Codex Skills — Secondary LANE Windows
 
 Secondary LANE by **Yurii Slepnev** · Apache-2.0  
-Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yurii86 · Instagram: https://instagram.com/yurii_yurii86
+Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yurii86
 
-Здесь лежат готовые skills для Codex, которые помогают ставить и сопровождать Windows-версию Secondary LANE.
+Скиллы для **OpenAI Codex** (ChatGPT с Codex-режимом).
 
-## Что это за папка
+> Если ты используешь **Claude Code** (Anthropic) — смотри папку
+> [`../claude-skills/`](../claude-skills/README.md).
 
-Главный готовый skill сейчас такой:
+## Что здесь
 
-- `gpts-windows-autopilot/`
-
-Это skill для почти автоматической установки Windows-версии проекта.
-
-Простыми словами:
-
-- ты даёшь этот skill Codex;
-- Codex сам делает максимум шагов;
-- тебя останавливают только там, где без живого человека нельзя: логин, регистрация, капча, подтверждение почты, оплата, системное разрешение.
+| Папка | Для чего |
+|---|---|
+| `gpts-windows-autopilot/` | Почти автоматическая установка Secondary LANE через Codex |
 
 ## Как использовать
 
-Самый безопасный постоянный путь:
-
-1. скопируй папку `gpts-windows-autopilot` в каталог skills твоего Codex;
-2. потом скажи Codex использовать этот skill для установки Secondary LANE.
-
-Пример фразы для Codex:
+1. Скопируй папку `gpts-windows-autopilot` в каталог skills своего Codex
+2. Скажи Codex:
 
 ```text
-Установи мне Secondary LANE на Windows по skill-у gpts-windows-autopilot. Делай всё сам, останавливайся только там, где нужен мой логин, регистрация, капча, подтверждение почты, оплата или системное разрешение.
+Установи мне Secondary LANE на Windows по skill-у gpts-windows-autopilot.
+Делай всё сам, останавливайся только там, где нужен мой логин,
+регистрация, капча, подтверждение почты, оплата или системное разрешение.
 ```
 
-Если Codex спросит, куда ставить проект, самый простой путь:
+Если Codex спросит, куда ставить проект:
 
 ```text
 C:\SecondLane
 ```
 
-## Что Codex должен делать сам
+## Что Codex делает сам
 
-- проверить структуру проекта;
-- проверить `Python 3.13`;
-- проверить `ngrok`;
-- помочь собрать `.env`;
-- поднять панель;
-- проверить туннель;
-- проверить `openapi.gpts.yaml`;
-- помочь собрать GPT в ChatGPT.
+- проверяет структуру проекта
+- проверяет Python 3.13 и ngrok
+- помогает собрать `.env`
+- поднимает панель и тоннель
+- проверяет `openapi.gpts.yaml`
+- проводит через сборку GPT в ChatGPT
 
-## Что Codex не должен притворяться делать без тебя
+## Что Codex не делает без тебя
 
-- регистрация аккаунта;
-- логин;
-- капча;
-- подтверждение почты;
-- оплата;
-- системное разрешение Windows или браузера.
+- регистрация / логин в ngrok и ChatGPT
+- капча, подтверждение почты, оплата
+- системные разрешения Windows
 
-## Где лежит ручная инструкция
+## Ручная инструкция
 
-Если хочешь делать всё без Codex или проверить его шаги руками, открой:
-
-- [`docs/WINDOWS_FIRST_START.md`](../docs/WINDOWS_FIRST_START.md)
-
-Там пошаговый гайд для установки с нуля без агента.
+Без Codex или для проверки шагов руками:
+[`docs/WINDOWS_FIRST_START.md`](../docs/WINDOWS_FIRST_START.md)

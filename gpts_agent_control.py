@@ -26,6 +26,9 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+import datetime
+import platform as _platform
+import tkinter as tk
 from tkinter import BOTH, END, LEFT, Button, Frame, Label, StringVar, Text, Tk
 import yaml
 
@@ -33,6 +36,23 @@ try:
     import certifi
 except ImportError:  # pragma: no cover - optional dependency at runtime
     certifi = None
+
+
+# ---------------------------------------------------------------------------
+# UI design tokens — Catppuccin Mocha palette
+# ---------------------------------------------------------------------------
+_C: dict[str, str] = {
+    "base":     "#1e1e2e", "mantle":   "#181825", "crust":    "#11111b",
+    "surface0": "#313244", "surface1": "#45475a", "surface2": "#585b70",
+    "overlay0": "#6c7086", "overlay1": "#7f849c",
+    "text":     "#cdd6f4", "subtext1": "#bac2de", "subtext0": "#a6adc8",
+    "green":    "#a6e3a1", "teal":     "#94e2d5", "blue":     "#89b4fa",
+    "mauve":    "#cba6f7", "lavender": "#b4befe", "yellow":   "#f9e2af",
+    "peach":    "#fab387", "red":      "#f38ba8", "maroon":   "#eba0ac",
+}
+_SYS       = _platform.system()
+_FONT_UI   = "Helvetica Neue" if _SYS == "Darwin" else ("Segoe UI"  if _SYS == "Windows" else "Sans")
+_FONT_MONO = "Menlo"          if _SYS == "Darwin" else ("Consolas"  if _SYS == "Windows" else "Monospace")
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -81,7 +101,6 @@ class ControlPanel:
     def __init__(self) -> None:
         self.root = Tk()
         self.root.title("Second Lane Control")
-        self.root.geometry("860x560")
 
         self.agent_proc: subprocess.Popen | None = None
         self.tunnel_proc: subprocess.Popen | None = None
@@ -105,38 +124,238 @@ class ControlPanel:
     # --- UI ---
 
     def _build_ui(self) -> None:
-        Label(self.root, text="Second Lane Control", font=("Helvetica", 22, "bold")).pack(pady=(16, 8))
-        Label(self.root, text="by Yurii Slepnev", font=("Helvetica", 11)).pack(pady=(0, 4))
-        Label(self.root, textvariable=self.agent_status, font=("Helvetica", 14)).pack(pady=4)
-        Label(self.root, textvariable=self.tunnel_url, font=("Helvetica", 14), wraplength=780).pack(pady=4)
+        # ── Window ──────────────────────────────────────────────────────
+        self.root.configure(bg=_C["base"])
+        self.root.geometry("940x660")
+        self.root.minsize(800, 540)
 
-        row_top = Frame(self.root)
-        row_top.pack(pady=(14, 8))
-        row_bottom = Frame(self.root)
-        row_bottom.pack(pady=(0, 14))
+        # ── Header bar ──────────────────────────────────────────────────
+        hdr = tk.Frame(self.root, bg=_C["mantle"], height=54)
+        hdr.pack(fill=tk.X, side=tk.TOP)
+        hdr.pack_propagate(False)
+        tk.Label(
+            hdr,
+            text="● Second Lane Control",
+            font=(_FONT_UI, 16, "bold"),
+            bg=_C["mantle"], fg=_C["mauve"],
+        ).pack(side=tk.LEFT, padx=20, pady=14)
+        tk.Label(
+            hdr,
+            text="by Yurii Slepnev",
+            font=(_FONT_UI, 10),
+            bg=_C["mantle"], fg=_C["overlay1"],
+        ).pack(side=tk.RIGHT, padx=20)
 
-        Button(row_top, text="Запустить", width=18, height=2, command=self.start_all).pack(side=LEFT, padx=8)
-        Button(row_top, text="Перезапустить демон", width=18, height=2, command=self.restart_daemon).pack(side=LEFT, padx=8)
-        Button(row_top, text="Выключить", width=18, height=2, command=self.stop_all).pack(side=LEFT, padx=8)
+        # ── Status section ───────────────────────────────────────────────
+        sx = tk.Frame(self.root, bg=_C["base"])
+        sx.pack(fill=tk.X, padx=14, pady=(10, 0))
 
-        Button(row_bottom, text="Скопировать URL", width=18, height=2, command=self.copy_url).pack(side=LEFT, padx=8)
-        Button(row_bottom, text="Проверить", width=18, height=2, command=self.check_now).pack(side=LEFT, padx=8)
-        Button(row_bottom, text="Открыть .env", width=18, height=2, command=self.open_env_file).pack(side=LEFT, padx=8)
-
-        self.log = Text(self.root, height=20, wrap="word")
-        self.log.pack(fill=BOTH, expand=True, padx=16, pady=(8, 16))
-        self.write_log(
-            "Second Lane by Yurii Slepnev\n"
-            "Telegram: https://t.me/yurii_yurii86\n"
-            "YouTube: https://youtube.com/@yurii_yurii86\n"
-            "Instagram: https://instagram.com/yurii_yurii86\n"
-            "Licensed under Apache-2.0\n\n"
-            "Открой это окно и нажми «Запустить». Потом вставь compact-схему openapi.gpts.yaml в GPT Actions.\n"
+        # Daemon row
+        dr = tk.Frame(sx, bg=_C["surface0"], padx=14, pady=9)
+        dr.pack(fill=tk.X, pady=(0, 3))
+        self._daemon_dot = tk.Label(
+            dr, text="●", font=(_FONT_UI, 15),
+            bg=_C["surface0"], fg=_C["overlay0"],
         )
+        self._daemon_dot.pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(
+            dr, text="ДЕМОН", font=(_FONT_UI, 8, "bold"),
+            bg=_C["surface0"], fg=_C["overlay1"], width=8, anchor="w",
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            dr, textvariable=self.agent_status, font=(_FONT_UI, 11),
+            bg=_C["surface0"], fg=_C["subtext1"], anchor="w", wraplength=620,
+        ).pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+
+        # Tunnel row
+        tr = tk.Frame(sx, bg=_C["surface0"], padx=14, pady=9)
+        tr.pack(fill=tk.X)
+        self._tunnel_dot = tk.Label(
+            tr, text="●", font=(_FONT_UI, 15),
+            bg=_C["surface0"], fg=_C["overlay0"],
+        )
+        self._tunnel_dot.pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(
+            tr, text="ТУННЕЛЬ", font=(_FONT_UI, 8, "bold"),
+            bg=_C["surface0"], fg=_C["overlay1"], width=8, anchor="w",
+        ).pack(side=tk.LEFT)
+        # Pack copy button on the RIGHT before the URL label so it stays right-aligned
+        tk.Button(
+            tr, text="Скопировать URL", font=(_FONT_UI, 9),
+            bg=_C["surface1"], fg=_C["subtext0"],
+            activebackground=_C["surface2"], activeforeground=_C["text"],
+            relief="flat", bd=0, padx=10, pady=3, cursor="hand2",
+            command=self.copy_url,
+        ).pack(side=tk.RIGHT, padx=(6, 0))
+        tk.Label(
+            tr, textvariable=self.tunnel_url, font=(_FONT_UI, 11),
+            bg=_C["surface0"], fg=_C["teal"], anchor="w", wraplength=500,
+        ).pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+
+        # Colour traces for status indicator dots
+        self.agent_status.trace_add("write", self._update_daemon_dot)
+        self.tunnel_url.trace_add("write", self._update_tunnel_dot)
+
+        # ── Action buttons ────────────────────────────────────────────────
+        btn = tk.Frame(self.root, bg=_C["base"])
+        btn.pack(fill=tk.X, padx=14, pady=10)
+        _p = dict(
+            font=(_FONT_UI, 12, "bold"),
+            bg=_C["mauve"], fg=_C["crust"],
+            activebackground=_C["lavender"], activeforeground=_C["crust"],
+            relief="flat", bd=0, padx=22, pady=10, cursor="hand2",
+        )
+        _s = dict(
+            font=(_FONT_UI, 11),
+            bg=_C["surface0"], fg=_C["text"],
+            activebackground=_C["surface1"], activeforeground=_C["text"],
+            relief="flat", bd=0, padx=18, pady=10, cursor="hand2",
+        )
+        _d = dict(
+            font=(_FONT_UI, 11),
+            bg=_C["surface0"], fg=_C["red"],
+            activebackground=_C["surface1"], activeforeground=_C["maroon"],
+            relief="flat", bd=0, padx=18, pady=10, cursor="hand2",
+        )
+        tk.Button(btn, text="▶  Запустить",     **_p, command=self.start_all).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(btn, text="↺  Перезапустить", **_s, command=self.restart_daemon).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(btn, text="■  Выключить",      **_d, command=self.stop_all).pack(side=tk.LEFT, padx=(0, 28))
+        tk.Button(btn, text="✓  Проверить",      **_s, command=self.check_now).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(btn, text="⚙  Открыть .env",  **_s, command=self.open_env_file).pack(side=tk.LEFT)
+
+        # ── Log console ───────────────────────────────────────────────────
+        lhdr = tk.Frame(self.root, bg=_C["mantle"])
+        lhdr.pack(fill=tk.X, padx=14)
+        tk.Label(
+            lhdr, text="ЖУРНАЛ СОБЫТИЙ", font=(_FONT_UI, 8, "bold"),
+            bg=_C["mantle"], fg=_C["overlay0"], padx=12, pady=5,
+        ).pack(side=tk.LEFT)
+        tk.Button(
+            lhdr, text="Очистить", font=(_FONT_UI, 8),
+            bg=_C["mantle"], fg=_C["overlay1"],
+            activebackground=_C["surface0"], activeforeground=_C["text"],
+            relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
+            command=lambda: self.log.delete("1.0", END),
+        ).pack(side=tk.RIGHT, padx=4)
+
+        lbox = tk.Frame(self.root, bg=_C["crust"])
+        lbox.pack(fill=BOTH, expand=True, padx=14, pady=(0, 14))
+        vsb = tk.Scrollbar(lbox, bg=_C["surface0"], troughcolor=_C["crust"],
+                           activebackground=_C["surface1"])
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.log = Text(
+            lbox,
+            wrap="word",
+            bg=_C["crust"], fg=_C["text"],
+            font=(_FONT_MONO, 11),
+            insertbackground=_C["text"],
+            selectbackground=_C["surface1"],
+            selectforeground=_C["text"],
+            relief="flat", bd=0,
+            padx=14, pady=8,
+            yscrollcommand=vsb.set,
+        )
+        self.log.pack(side=tk.LEFT, fill=BOTH, expand=True)
+        vsb.config(command=self.log.yview)
+
+        # Log colour tags
+        self.log.tag_config("ts",     foreground=_C["overlay0"])
+        self.log.tag_config("info",   foreground=_C["subtext0"])
+        self.log.tag_config("ok",     foreground=_C["green"])
+        self.log.tag_config("warn",   foreground=_C["peach"])
+        self.log.tag_config("error",  foreground=_C["red"])
+        self.log.tag_config("ngrok",  foreground=_C["blue"])
+        self.log.tag_config("agent",  foreground=_C["mauve"])
+        self.log.tag_config("action", foreground=_C["yellow"])
+        self.log.tag_config("url",    foreground=_C["teal"])
+        self.log.tag_config("dim",    foreground=_C["overlay0"])
+        self.log.tag_config("hdr",    foreground=_C["mauve"],
+                            font=(_FONT_MONO, 12, "bold"))
+        self._write_log_header()
 
     def write_log(self, text: str) -> None:
-        self.log.insert(END, text)
+        if not text:
+            return
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        for line in text.rstrip("\n").split("\n"):
+            self.log.insert(END, f"{now}  ", "ts")
+            self.log.insert(END, line + "\n", self._log_tag(line))
         self.log.see(END)
+
+    def _write_log_header(self) -> None:
+        self.log.insert(END, "\n  Second Lane by Yurii Slepnev\n", "hdr")
+        sep = "  " + "─" * 46 + "\n"
+        self.log.insert(END, sep, "dim")
+        for lbl, url in (
+            ("  Telegram: ", "https://t.me/yurii_yurii86"),
+            ("  YouTube:  ", "https://youtube.com/@yurii_yurii86"),
+            ("  Instagram:", "https://instagram.com/yurii_yurii86"),
+        ):
+            self.log.insert(END, lbl, "dim")
+            self.log.insert(END, url + "\n", "url")
+        self.log.insert(END, "  Licensed under Apache-2.0\n", "dim")
+        self.log.insert(END, sep, "dim")
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        self.log.insert(END, f"\n{now}  ", "ts")
+        self.log.insert(END, "Панель готова — нажми «Запустить».\n", "info")
+        self.log.see(END)
+
+    def _log_tag(self, line: str) -> str:
+        low = line.lower()
+        if line.startswith("[ngrok]"):
+            return "ngrok"
+        if line.startswith("[agent]"):
+            return "agent"
+        if any(k in low for k in (
+            "ok ✓", "туннель активен", "url вставлен", "готов",
+            "скопировал", "автопроверка туннеля: ok", "снова отвечает",
+            "работает", "уже запущен", "активен",
+        )):
+            return "ok"
+        if any(k in low for k in (
+            "ошибка", "упал", "не смог", "заблокировал", "err_ngrok",
+            "не найден", "не поднялся", "неизвестн", "невалид",
+        )):
+            return "error"
+        if any(k in low for k in (
+            "восстановление", "попыт", "проверка публичного", "предупрежд",
+        )):
+            return "warn"
+        if any(k in low for k in (
+            "запускаю", "поднимаю", "останавливаю", "перезапуск", "создаю",
+        )):
+            return "action"
+        if "https://" in line or "http://" in line:
+            return "url"
+        return "info"
+
+    def _update_daemon_dot(self, *_: object) -> None:
+        val = self.agent_status.get().lower()
+        if "работает" in val or "уже запущен" in val:
+            color = _C["green"]
+        elif "перезапуск" in val:
+            color = _C["peach"]
+        else:
+            color = _C["overlay0"]
+        try:
+            self._daemon_dot.configure(fg=color)
+        except Exception:
+            pass
+
+    def _update_tunnel_dot(self, *_: object) -> None:
+        val = self.tunnel_url.get().lower()
+        if "https://" in val:
+            color = _C["green"]
+        elif "восстановление" in val:
+            color = _C["peach"]
+        elif any(k in val for k in ("ошибка", "упал", "заблокировал")):
+            color = _C["red"]
+        else:
+            color = _C["overlay0"]
+        try:
+            self._tunnel_dot.configure(fg=color)
+        except Exception:
+            pass
 
     # --- Env / config ---
 

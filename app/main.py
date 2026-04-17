@@ -21,10 +21,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, SecretStr
 
 from app.core.config import PROJECT_DIR, Settings, load_settings, validate_runtime_settings
+from app.core.rate_limit import SlidingWindowLimiter
 from app.core.project_memory import (
     append_jsonl,
     create_checkpoint,
@@ -56,6 +58,25 @@ app = FastAPI(
 )
 PROCESS_REGISTRY: dict[int, dict[str, Any]] = {}
 IS_WINDOWS = os.name == "nt"
+
+
+_RATE_LIMIT_MAX = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "600"))
+_RATE_LIMITER = SlidingWindowLimiter(max_requests=_RATE_LIMIT_MAX, window_seconds=60.0)
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if _RATE_LIMIT_MAX <= 0 or not request.url.path.startswith("/v1/"):
+        return await call_next(request)
+    client = request.client.host if request.client else "unknown"
+    allowed, retry_after = _RATE_LIMITER.allow(client)
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "rate limit exceeded", "retry_after": retry_after},
+            headers={"Retry-After": str(retry_after)},
+        )
+    return await call_next(request)
 
 
 _initialized_dbs: set[str] = set()
@@ -496,7 +517,7 @@ class GuiActionReq(BaseModel):
 class SshReq(BaseModel):
     host: str
     username: str
-    password: str | None = None
+    password: SecretStr | None = None
     command: str
     port: int = 22
 
@@ -1318,8 +1339,9 @@ def ssh_exec(req: SshReq, _auth: None = Depends(auth_dependency)) -> dict[str, A
     client = paramiko.SSHClient()
     _load_known_ssh_hosts(client, settings)
     client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    password_value = req.password.get_secret_value() if req.password is not None else None
     try:
-        client.connect(req.host, port=req.port, username=req.username, password=req.password, timeout=settings.default_timeout_sec)
+        client.connect(req.host, port=req.port, username=req.username, password=password_value, timeout=settings.default_timeout_sec)
         _, stdout, stderr = client.exec_command(req.command, timeout=settings.default_timeout_sec)
         out = stdout.read().decode("utf-8", errors="replace")
         err = stderr.read().decode("utf-8", errors="replace")

@@ -7,6 +7,17 @@ Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yuri
 
 ### Unreleased
 
+#### Безопасность
+
+- поле `password` в запросе `/v1/ssh/exec` теперь использует `pydantic.SecretStr` — значение маскируется в repr, tracebacks и потенциальных логах
+- добавлен in-memory sliding-window rate limiter для `/v1/*` маршрутов (по IP), лимит задаётся переменной `RATE_LIMIT_PER_MINUTE` (по умолчанию 600, `0` отключает)
+
+#### Исправлено
+
+- `ensure_uvicorn` теперь печатает код возврата и последние 15 строк stderr от `venv` и `pip install` — непонятное «не смог подготовить окружение» заменено на диагностику с подсказкой (сеть, прокси, SSL, устаревший pip)
+- сужены `except Exception` в `app/core/utils.py:search_text` и `_resolve_python_command` — больше не прячем реальные ошибки сети/диска под общим `Exception`
+- Windows smoke diagnostics: action defects и UTF-8 консоль на ru-RU Windows
+
 #### Добавлено
 
 - более сильное публичное позиционирование проекта под именем `Secondary LANE`
@@ -25,6 +36,17 @@ Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yuri
 ## EN
 
 ### Unreleased
+
+#### Security
+
+- `password` field on `/v1/ssh/exec` now uses `pydantic.SecretStr` — value is masked in repr, tracebacks, and any future logs
+- added in-memory sliding-window rate limiter for `/v1/*` routes (keyed by client IP); limit configurable via `RATE_LIMIT_PER_MINUTE` env var (default 600, `0` disables)
+
+#### Fixed
+
+- `ensure_uvicorn` now surfaces venv/pip return code and the last 15 lines of stderr — the opaque "не смог подготовить окружение" is replaced with actionable diagnostics (network, proxy, SSL, outdated pip)
+- narrowed `except Exception` in `app/core/utils.py:search_text` and `_resolve_python_command` — we no longer swallow real disk/network errors under a blanket `Exception`
+- Windows smoke diagnostics: action defects and UTF-8 console behavior on ru-RU Windows
 
 #### Added
 

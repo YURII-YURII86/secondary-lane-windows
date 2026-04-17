@@ -504,3 +504,26 @@ def test_ssh_exec_rejects_when_no_known_hosts_loaded(monkeypatch, tmp_path: Path
     )
     assert resp.status_code == 500
     assert "known_hosts" in resp.json()["detail"]
+
+
+def test_rate_limiter_returns_429_when_exceeded(monkeypatch) -> None:
+    from app.core.rate_limit import SlidingWindowLimiter
+    tight = SlidingWindowLimiter(max_requests=3, window_seconds=60.0)
+    monkeypatch.setattr(main, "_RATE_LIMITER", tight)
+    monkeypatch.setattr(main, "_RATE_LIMIT_MAX", 3)
+
+    client = TestClient(main.app)
+    statuses = [client.get("/v1/capabilities", headers=AUTH).status_code for _ in range(5)]
+    assert statuses[:3] == [200, 200, 200]
+    assert statuses[3] == 429
+    assert statuses[4] == 429
+
+
+def test_rate_limiter_allows_when_disabled(monkeypatch) -> None:
+    from app.core.rate_limit import SlidingWindowLimiter
+    monkeypatch.setattr(main, "_RATE_LIMIT_MAX", 0)
+    monkeypatch.setattr(main, "_RATE_LIMITER", SlidingWindowLimiter(max_requests=1, window_seconds=60.0))
+
+    client = TestClient(main.app)
+    for _ in range(5):
+        assert client.get("/v1/capabilities", headers=AUTH).status_code == 200

@@ -549,7 +549,7 @@ class ControlPanel:
                     text=True,
                     timeout=5,
                 )
-            except Exception:
+            except (OSError, subprocess.TimeoutExpired):
                 continue
             if result.returncode == 0 and "3.13" in (result.stdout or ""):
                 return command
@@ -566,18 +566,26 @@ class ControlPanel:
             )
             return False
         self.write_log(f"Не нашёл готовый uvicorn. Создаю окружение через {' '.join(python_cmd)}...\n")
+        pip_bin = str(VENV_DIR / ("Scripts/pip.exe" if IS_WINDOWS else "bin/pip"))
         try:
             venv_result = subprocess.run(
                 [*python_cmd, "-m", "venv", str(VENV_DIR)],
                 cwd=PROJECT_DIR,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, timeout=60,
+                text=True, timeout=120,
             )
             if venv_result.returncode != 0:
-                self.write_log(f"venv не создался:\n{venv_result.stdout or ''}\n")
+                self.write_log(
+                    f"Не смог создать виртуальное окружение ({' '.join(python_cmd)} -m venv).\n"
+                    f"Код возврата: {venv_result.returncode}\n"
+                    f"Вывод: {(venv_result.stdout or '').strip()[:800]}\n"
+                    f"Проверь: 1) Python установлен полностью (не только embeddable); "
+                    f"2) есть права записи в {VENV_DIR}; 3) антивирус не блокирует создание файлов.\n"
+                )
                 return False
             self.write_log("Виртуальное окружение создано. Устанавливаю зависимости...\n")
-            pip_bin = str(VENV_DIR / ("Scripts/pip.exe" if IS_WINDOWS else "bin/pip"))
+            # Live-stream pip output into the log panel (Popen + _stream_process)
+            # — in pythonw.exe the GUI has no console, so capturing is required.
             pip_proc = subprocess.Popen(
                 [pip_bin, "install", "--quiet", "-r", str(PROJECT_DIR / "requirements.txt")],
                 cwd=PROJECT_DIR,
@@ -587,12 +595,19 @@ class ControlPanel:
             threading.Thread(target=self._stream_process, args=(pip_proc, "pip"), daemon=True).start()
             pip_proc.wait()
             if pip_proc.returncode != 0:
-                self.write_log("pip install завершился с ошибкой — проверь лог выше.\n")
+                self.write_log(
+                    f"pip install завершился с кодом {pip_proc.returncode}. См. строки [pip] выше.\n"
+                    f"Типичные причины: нет интернета, корпоративный прокси, блокировка SSL, "
+                    f"устаревший pip (запусти '{pip_bin} install --upgrade pip').\n"
+                )
                 return False
             self.write_log("Зависимости установлены.\n")
             return True
-        except Exception as exc:
-            self.write_log(f"Не смог подготовить Python-окружение через {' '.join(python_cmd)}: {exc}\n")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            self.write_log(
+                f"Не смог подготовить Python-окружение через {' '.join(python_cmd)}: {exc}\n"
+                f"Проверь сетевое соединение и что Python не запущен от другого пользователя.\n"
+            )
             return False
 
     # --- Start / stop ---

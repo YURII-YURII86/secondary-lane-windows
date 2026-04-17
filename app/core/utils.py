@@ -123,7 +123,7 @@ def search_text(root: Path, query: str, max_results: int = 50) -> list[dict]:
             continue
         try:
             text = file_path.read_text("utf-8")
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             continue
         for idx, line in enumerate(text.splitlines(), start=1):
             if query in line:

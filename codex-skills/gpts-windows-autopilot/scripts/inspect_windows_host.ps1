@@ -51,15 +51,82 @@ function Get-EnvMap {
   return $map
 }
 
-$branchRoot = $ProjectRoot
-if (-not (Test-Path (Join-Path $branchRoot ".env.example"))) {
-  $candidate = Join-Path $ProjectRoot "Версия для Виндовс"
-  if (Test-Path (Join-Path $candidate ".env.example")) {
-    $branchRoot = $candidate
-  } else {
-    throw "Could not find Windows branch root with .env.example"
+function Test-BranchRoot {
+  param([string]$Path)
+  if (-not (Test-Path (Join-Path $Path ".env.example"))) { return $false }
+  $sideMarkers = @("gpts_agent_control.py", "openapi.gpts.yaml")
+  foreach ($marker in $sideMarkers) {
+    if (Test-Path (Join-Path $Path $marker)) { return $true }
   }
+  return $false
 }
+
+$knownBranchNames = @(
+  "Версия для Виндовс",
+  "Secondary-LANE-Windows",
+  "secondary-lane-windows",
+  "SecondaryLANE-Windows",
+  "SecondLane",
+  "Secondary LANE"
+)
+
+function Find-BranchRoot {
+  param([string]$StartPath)
+  $resolved = (Resolve-Path -Path $StartPath -ErrorAction SilentlyContinue)
+  if (-not $resolved) { throw "Path not found: $StartPath" }
+  $start = $resolved.Path
+
+  # 1. start itself
+  if (Test-BranchRoot -Path $start) { return $start }
+
+  # 2. known-named subfolders
+  foreach ($name in $knownBranchNames) {
+    $candidate = Join-Path $start $name
+    if (Test-BranchRoot -Path $candidate) { return $candidate }
+  }
+
+  # 3. walk up a few levels
+  $current = $start
+  for ($i = 0; $i -lt 4; $i++) {
+    $parent = Split-Path -Parent $current
+    if ([string]::IsNullOrEmpty($parent) -or $parent -eq $current) { break }
+    if (Test-BranchRoot -Path $parent) { return $parent }
+    $current = $parent
+  }
+
+  # 4. bounded walk down (depth <=4, skipping junk dirs)
+  $queue = New-Object System.Collections.Generic.Queue[object]
+  $queue.Enqueue(@{ Path = $start; Depth = 0 })
+  $skip = @(".git", "__pycache__", "node_modules", ".venv", "venv", ".idea", ".vscode")
+  while ($queue.Count -gt 0) {
+    $item = $queue.Dequeue()
+    $p = $item.Path
+    $d = $item.Depth
+    if (Test-BranchRoot -Path $p) { return $p }
+    if ($d -ge 4) { continue }
+    try {
+      $children = Get-ChildItem -LiteralPath $p -Directory -Force -ErrorAction SilentlyContinue
+    } catch { continue }
+    foreach ($child in $children) {
+      if ($skip -contains $child.Name) { continue }
+      if ($child.Name.StartsWith(".")) { continue }
+      $queue.Enqueue(@{ Path = $child.FullName; Depth = $d + 1 })
+    }
+  }
+
+  throw @"
+Could not find the Windows project branch root.
+  Searched under: $start
+  Looked for: .env.example + gpts_agent_control.py (or openapi.gpts.yaml)
+  Checked known folder names: $($knownBranchNames -join ', ')
+
+Fix: make sure you unpacked the Secondary LANE archive, and that the path
+you passed either IS the Windows branch folder or a folder that directly
+contains it.
+"@
+}
+
+$branchRoot = Find-BranchRoot -StartPath $ProjectRoot
 
 $important = @(
   ".env.example",

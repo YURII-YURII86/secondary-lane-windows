@@ -7,9 +7,10 @@ import sys
 
 PAGES = {
     "python-windows": "https://www.python.org/downloads/windows/",
-    "ngrok-download": "https://ngrok.com/download/windows",
+    "ngrok-signup": "https://dashboard.ngrok.com/signup",
+    "ngrok-download": "https://ngrok.com/download",
     "ngrok-authtoken": "https://dashboard.ngrok.com/get-started/your-authtoken",
-    "ngrok-domains": "https://dashboard.ngrok.com/",
+    "ngrok-domains": "https://dashboard.ngrok.com/domains",
     "chatgpt-gpts": "https://chatgpt.com/gpts",
     "chatgpt-editor": "https://chatgpt.com/gpts/editor",
     "openai-gpts-help": "https://help.openai.com/en/articles/8554397-creating-a-gpt",

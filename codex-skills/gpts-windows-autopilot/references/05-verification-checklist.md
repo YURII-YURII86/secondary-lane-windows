@@ -14,9 +14,9 @@ Do not declare success until every item below is factually true.
 
 ## Panel and tunnel checks
 
-- the project panel opened
-- local daemon is healthy
-- tunnel is active
+- the project panel opened (the "Запустить GPTS Agent.bat" console window stays open)
+- the agent process is running and its `/health` or `/capabilities` endpoint responds
+- ngrok tunnel is active
 - a real public `https://...` URL is visible
 - the port was not unsafely reused from an unknown process
 

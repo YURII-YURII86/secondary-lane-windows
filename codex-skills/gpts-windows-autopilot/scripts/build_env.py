@@ -5,13 +5,8 @@ import secrets
 import sys
 from pathlib import Path
 
-
-def find_branch_root(raw_root: Path) -> Path:
-    candidates = [raw_root, raw_root / "Версия для Виндовс"]
-    for candidate in candidates:
-        if (candidate / ".env.example").exists():
-            return candidate
-    raise SystemExit("Could not find Windows project root with .env.example")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import find_branch_root, is_windows_style_path  # noqa: E402
 
 
 def parse_env_lines(text):
@@ -31,10 +26,6 @@ def set_key(lines, key, value):
     if not replaced:
         new_lines.append(f"{prefix}{value}")
     return new_lines
-
-
-def is_windows_style_path(value: str) -> bool:
-    return len(value) >= 3 and value[1:3] == ":\\" and value[0].isalpha()
 
 
 def main():
@@ -71,7 +62,9 @@ def main():
 
     lines = set_key(lines, "AGENT_TOKEN", agent_token)
     lines = set_key(lines, "NGROK_DOMAIN", ngrok_domain)
-    lines = set_key(lines, "WORKSPACE_ROOTS", f"{project_path_windows};C:\\Projects;D:\\Workspace")
+    # Only the real project root — do not advertise bogus C:\Projects / D:\Workspace
+    # placeholders that confused users into thinking they had to create those folders.
+    lines = set_key(lines, "WORKSPACE_ROOTS", project_path_windows)
     lines = set_key(lines, "ENABLED_PROVIDER_MANIFESTS", f"{project_path_windows}\\app\\providers")
     lines = set_key(lines, "STATE_DB_PATH", f"{project_path_windows}\\data\\agent.db")
 

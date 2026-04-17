@@ -128,9 +128,22 @@ Use this to open official pages quickly when browser control is limited.
 
 Examples:
 
+Available page keys (pass any combination):
+
+- `python-windows` — Python download page
+- `ngrok-signup` — ngrok sign-up page (for brand-new users)
+- `ngrok-download` — ngrok CLI download
+- `ngrok-authtoken` — authtoken page after login
+- `ngrok-domains` — reserved domains page
+- `chatgpt-gpts` — user's GPT list
+- `chatgpt-editor` — new-GPT editor
+- `openai-gpts-help` — OpenAPI Actions help article
+
+Examples:
+
 ```bash
 python scripts/open_setup_pages.py python-windows
-python scripts/open_setup_pages.py ngrok-download ngrok-authtoken
+python scripts/open_setup_pages.py ngrok-signup ngrok-authtoken ngrok-domains
 python scripts/open_setup_pages.py chatgpt-editor
 ```
 

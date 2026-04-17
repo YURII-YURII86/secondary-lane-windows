@@ -2,13 +2,19 @@
 
 Use this when guiding the user through ChatGPT.
 
+> **Paths:** the fragment shown as `<branch>/` below means the branch root
+> returned by `discover_secondarylane_layout.py` / `_common.find_branch_root`.
+> Do NOT hardcode `Версия для Виндовс/` — the user may have unpacked under
+> `C:\SecondLane\`, `Downloads\secondary-lane-windows\` or any other name.
+> Always substitute the real discovered path before showing it to the user.
+
 ## Main mapping
 
 ### Instructions
 
 Source:
 
-- `Версия для Виндовс/gpts/system_instructions.txt`
+- `<branch>/gpts/system_instructions.txt`
 
 Destination in ChatGPT:
 
@@ -18,7 +24,7 @@ Destination in ChatGPT:
 
 Source:
 
-- all `.md` files from `Версия для Виндовс/gpts/knowledge/` and its subfolders
+- all `.md` files from `<branch>/gpts/knowledge/` and its subfolders
 
 Destination in ChatGPT:
 
@@ -28,7 +34,7 @@ Destination in ChatGPT:
 
 Source:
 
-- `Версия для Виндовс/openapi.gpts.yaml`
+- `<branch>/openapi.gpts.yaml`
 
 Destination in ChatGPT:
 
@@ -48,25 +54,43 @@ Do not tell the user to:
 
 ## Auth map
 
+### What the user sees in ChatGPT
+
+In the GPT editor → `Actions` → `Authentication`:
+
+- choose `API Key`
+- `Auth Type` = `Bearer`
+- `API Key` = **только значение токена** (строка после `AGENT_TOKEN=` в `.env`)
+
+### Plain-language explanation to give the user
+
+> «Bearer-токен — это просто пароль, который агент на твоём компьютере
+> ждёт в каждом запросе от ChatGPT. В `.env` он записан в виде
+> `AGENT_TOKEN=длинная_строка`. В ChatGPT нужно вставить только эту
+> длинную строку — без слова `Bearer`, без знака `=`, без кавычек.
+> ChatGPT сам добавит `Bearer ` в начало при отправке».
+
 Source:
 
-- the value part of `AGENT_TOKEN=...` from `.env`
+- the value part of `AGENT_TOKEN=...` from `.env` (everything right of the `=`)
 
 Destination:
 
-- the auth/token field in the ChatGPT action setup
+- `API Key` field in the ChatGPT action setup (with `Auth Type` = `Bearer`)
 
 Primary rule:
 
-- if ChatGPT already shows `Bearer`, paste only the raw token value
+- paste **only** the raw token value
 
-Fallback only if the UI explicitly asks for a full header:
+Fallback only if the UI explicitly asks for a full header value:
 
-- `Bearer <token>`
+- then paste `Bearer <token>` (with a single space)
 
 Never paste:
 
-- `AGENT_TOKEN=<token>`
+- `AGENT_TOKEN=<token>` (the whole `.env` line)
+- the value in quotes
+- anything with trailing spaces or newlines
 
 ## Preview test suggestion
 

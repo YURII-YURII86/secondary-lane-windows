@@ -18,7 +18,8 @@ The agent should always know which state it is in before acting.
 | S9 | ChatGPT gate unfinished | Open GPT editor and wait only for login/plan gate | GPT editor reachable | S10 |
 | S10 | GPT not yet assembled | Guide exact GPT creation flow | GPT fields and Actions configured | S11 |
 | S11 | Auth or action call unverified | Fix auth and test Preview | Preview action call works | S12 |
-| S12 | Final user-facing GPT unverified | Test one simple real call in saved GPT | Saved GPT can call the agent | DONE |
+| S12 | Final user-facing GPT unverified | Test one simple real call in saved GPT | Saved GPT can call the agent | S13 |
+| S13 | Final handoff to user | Give plain-language summary: project folder, `.env` location, what stays open, how to relaunch, what to do if tunnel dies | User confirms they understand and can reopen next time | DONE |
 
 ## Stop rule
 

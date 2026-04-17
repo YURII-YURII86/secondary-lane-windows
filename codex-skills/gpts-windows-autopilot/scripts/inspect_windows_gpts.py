@@ -5,6 +5,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import find_branch_root  # noqa: E402
+
 
 IMPORTANT_FILES = [
     ".env.example",
@@ -38,14 +41,6 @@ def run_command(command):
             "stdout": "",
             "stderr": str(exc),
         }
-
-
-def find_branch_root(raw_root: Path) -> Path:
-    candidates = [raw_root, raw_root / "Версия для Виндовс"]
-    for candidate in candidates:
-        if (candidate / ".env.example").exists():
-            return candidate
-    raise SystemExit("Could not find Windows project root with .env.example")
 
 
 def parse_env(env_path: Path):

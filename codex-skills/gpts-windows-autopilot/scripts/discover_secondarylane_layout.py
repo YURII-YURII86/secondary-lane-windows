@@ -55,16 +55,38 @@ def main():
     root = Path(args.search_root).expanduser().resolve()
     results = []
 
-    candidate_dirs = [root]
-    for path in root.rglob("*"):
-        if not path.is_dir():
+    # Bounded BFS instead of root.rglob("*") which previously walked
+    # the entire subtree (potentially millions of files on OneDrive/
+    # System Volume Information/Windows\WinSxS) and tripped on access
+    # denied errors.
+    SKIP_DIRS = {
+        ".git", "__pycache__", "node_modules",
+        ".venv", "venv", ".idea", ".vscode",
+        "$RECYCLE.BIN", "System Volume Information",
+    }
+    candidate_dirs = []
+    frontier: list[tuple[Path, int]] = [(root, 0)]
+    while frontier:
+        current, depth = frontier.pop(0)
+        candidate_dirs.append(current)
+        if depth >= args.max_depth:
             continue
         try:
-            depth = len(path.relative_to(root).parts)
-        except ValueError:
+            children = list(current.iterdir())
+        except (PermissionError, OSError):
             continue
-        if depth <= args.max_depth:
-            candidate_dirs.append(path)
+        for child in children:
+            try:
+                if not child.is_dir():
+                    continue
+            except (PermissionError, OSError):
+                continue
+            name = child.name
+            if name in SKIP_DIRS:
+                continue
+            if name.startswith(".") and name not in ("."):
+                continue
+            frontier.append((child, depth + 1))
 
     seen = set()
     for candidate in candidate_dirs:

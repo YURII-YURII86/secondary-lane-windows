@@ -34,6 +34,7 @@ Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yuri
 - документация теперь жёстко фиксирует Python `3.13` как рабочий локальный путь, а repo-local verify/test контур приводит к стандартному `.venv`
 - Windows-пакет был ужат: из репозитория убраны non-operational launch/demo/planning-файлы, которые не были нужны для runtime, onboarding, verification или GPT setup
 - `Запустить GPTS Agent.bat` теперь сначала отправляет неподготовленную установку в мастер, а не оставляет человека один на один с ручными шагами
+- GitHub-репозиторий Windows-версии дополнительно очищен от dev-only skill-папок, тестов, deploy-артефактов и внутренних документов, чтобы скачавший пользователь видел только нужное для установки и работы
 
 ## EN
 
@@ -66,3 +67,4 @@ Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yuri
 - documentation now explicitly fixes Python `3.13` as the supported local path and standardizes the repo-local verify/test environment around `.venv`
 - the Windows package was tightened by removing non-operational launch/demo/planning files that were not needed for runtime, onboarding, verification, or GPT setup
 - `Запустить GPTS Agent.bat` now redirects unprepared installs into the installer instead of dropping beginners into manual setup
+- the GitHub Windows repo was further cleaned of dev-only skill folders, tests, deploy artifacts, and internal docs so a normal downloader only sees what is needed to install and use the product

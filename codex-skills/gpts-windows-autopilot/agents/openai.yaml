@@ -1,4 +1,0 @@
-interface:
-  display_name: "GPTS Windows Autopilot"
-  short_description: "Авторазвёртывание GPTS на Windows"
-  default_prompt: "Открой $gpts-windows-autopilot и проведи меня через установку GPTS на Windows с минимумом действий: проверь Python 3.13 и ngrok, останавливайся только там, где действительно нужно мои руки (логин, регистрация, вставка authtoken), заполни .env, запусти панель, проверь тоннель, помоги собрать GPT с Actions и сделать первый проверочный запрос. Говори по-русски, пошагово, без технического жаргона."

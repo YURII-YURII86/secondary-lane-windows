@@ -10,7 +10,7 @@ Built on official ChatGPT features: GPTs, Actions, instructions, and knowledge f
 
 Built by [Yurii Slepnev](https://t.me/yurii_yurii86) · [YouTube](https://youtube.com/@yurii_yurii86) · [Instagram](https://instagram.com/yurii_yurii86) · Apache-2.0
 
-Language: [Russian version](docs/README_RU.md)
+Russian setup guide: [docs/WINDOWS_FIRST_START.md](docs/WINDOWS_FIRST_START.md)
 
 ---
 
@@ -138,7 +138,7 @@ Before you start, you still need **three things** available at some point:
 2. **ngrok** account + a reserved free domain — [dashboard.ngrok.com](https://dashboard.ngrok.com) (free tier is enough)
 3. **ChatGPT Plus** (or any plan that supports Custom GPTs with Actions)
 
-Then pick one of three paths.
+Then pick one of two paths.
 
 ### Path A — Use the built-in installer
 
@@ -154,23 +154,7 @@ For a more detailed walkthrough with explanations and screenshots, use:
 
 **[docs/WINDOWS_FIRST_START.md](docs/WINDOWS_FIRST_START.md)**
 
-### Path B — Let an agent do it (Codex / Claude Code)
-
-If you already have **Codex or Claude Code** installed, this is the fastest automated route.
-
-Pass this file to the agent:
-
-`codex-skills/gpts-windows-autopilot/SKILL.md`
-
-And say:
-
-```text
-Deploy Secondary LANE for me.
-```
-
-The agent will check Python, help with ngrok, fill `.env`, launch the panel, verify the tunnel, and walk you through GPT setup. You only step in for login, captcha, email confirmation, or payment.
-
-### Path C — Manual install (no agent needed)
+### Path B — Manual install (no agent needed)
 
 If you prefer doing everything by hand, use the step-by-step beginner guide:
 
@@ -235,8 +219,8 @@ app/main.py              # FastAPI server and API routes
 app/core/                # Config, security, utilities, project memory
 gpts/                    # GPT instructions and knowledge pack
 gpts_agent_control.py    # Control panel (daemon + ngrok tunnel)
+second_lane_installer.py # Guided installer for Windows
 openapi.gpts.yaml        # API schema for GPT Actions
-tests/                   # Regression and smoke tests
 .env.example             # Configuration template
 ```
 
@@ -247,19 +231,6 @@ tests/                   # Regression and smoke tests
 - SSH is restricted to approved hosts and networks
 - weak tokens are rejected at startup
 - key actions are written to an SQLite audit log
-
-## Local Verification
-
-```powershell
-# Full verification: compile + tests
-powershell -ExecutionPolicy Bypass -File scripts\verify_local.ps1
-
-# Tests only
-powershell -ExecutionPolicy Bypass -File scripts\run_local_pytest.ps1
-
-# Smoke check: start the server, verify health, stop it
-powershell -ExecutionPolicy Bypass -File scripts\smoke_local.ps1
-```
 
 ## Requirements
 

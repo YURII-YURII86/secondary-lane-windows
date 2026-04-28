@@ -131,7 +131,7 @@ The easiest path now is:
 
 The installer is intentionally step-by-step: it checks Python 3.13, helps with ngrok, creates `.env`, prepares `.venv`, repairs broken local setup, and shows input fields only when that exact step needs them.
 
-If the first run went wrong, use `Сбросить мастер и начать заново` in the installer. It safely resets the wizard flow without deleting the project, `.env`, or `.venv`, and forces the ngrok key step to appear again.
+If the first run went wrong, use `Сбросить мастер и начать заново` in the installer. It safely resets the wizard flow without deleting the project, `.env`, or `.venv`, and forces the ngrok key step to appear again. If you only need to change the ngrok key, use `Заменить ключ ngrok`.
 
 If you prefer another route, here are the options.
 

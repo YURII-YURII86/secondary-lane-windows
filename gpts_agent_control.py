@@ -104,7 +104,7 @@ class LocalDaemonProcess:
 
 
 class ControlPanel:
-    def __init__(self) -> None:
+    def __init__(self, *, start_status_poll: bool = True) -> None:
         self.root = Tk()
         self.root.title("Second Lane Control")
 
@@ -125,7 +125,8 @@ class ControlPanel:
 
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
-        self._poll_status()
+        if start_status_poll:
+            self._poll_status()
 
     # --- UI ---
 
@@ -530,7 +531,7 @@ class ControlPanel:
             install_hint = (
                 "ngrok не найден. Открой установщик: он попробует поставить ngrok автоматически или даст выбрать ngrok.exe"
                 if IS_WINDOWS
-                else "ngrok не найден. Установи: brew install ngrok"
+                else "ngrok не найден. Открой установщик и пройди шаг установки ngrok."
             )
             return False, install_hint
         domain = self.ngrok_domain().strip()
@@ -1387,5 +1388,19 @@ class ControlPanel:
         self.root.mainloop()
 
 
+def control_panel_self_check() -> int:
+    try:
+        panel = ControlPanel(start_status_poll=False)
+        panel.root.update_idletasks()
+        panel.root.destroy()
+    except Exception as exc:
+        print(f"Control panel smoke check failed: {exc}")
+        return 1
+    print("control panel self-check ok")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--self-check" in sys.argv:
+        raise SystemExit(control_panel_self_check())
     ControlPanel().run()

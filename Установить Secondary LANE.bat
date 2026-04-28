@@ -5,6 +5,10 @@ cd /d "%~dp0"
 
 set "SCRIPT=%~dp0second_lane_installer.py"
 set "INSTALLER_LOG=%TEMP%\secondary-lane-installer-startup.log"
+set "PF86=%ProgramFiles(x86)%"
+set "PY313_LOCAL=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+set "PY313_PF=%ProgramFiles%\Python313\python.exe"
+set "PY313_PF86=%PF86%\Python313\python.exe"
 set "PYEXE="
 
 :resolvepython
@@ -25,7 +29,7 @@ if not defined PYEXE (
 )
 
 if not defined PYEXE (
-    for %%P in ("%LOCALAPPDATA%\Programs\Python\Python313\python.exe" "%ProgramFiles%\Python313\python.exe" "%ProgramFiles(x86)%\Python313\python.exe") do (
+    for %%P in ("!PY313_LOCAL!" "!PY313_PF!" "!PY313_PF86!") do (
         if exist "%%~P" (
             "%%~P" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul
             if not errorlevel 1 if not defined PYEXE set "PYEXE=%%~P"

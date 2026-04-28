@@ -65,6 +65,10 @@ INTERNET_CHECK_URLS = (
 )
 
 NGROK_DOMAIN_REGEX = re.compile(r"^[A-Za-z0-9-]+\.(?:ngrok-free\.dev|ngrok\.app)$")
+PLACEHOLDER_WORKSPACE_ROOTS = {
+    r"c:\secondlane",
+    "c:/secondlane",
+}
 
 PALETTE = {
     "app_bg": "#eef2f6",
@@ -194,6 +198,11 @@ def merge_workspace_roots(primary_root: str, existing_value: str) -> str:
         seen.add(key)
         ordered.append(cleaned)
     return ";".join(ordered)
+
+
+def is_placeholder_workspace_root(raw: str) -> bool:
+    first = normalize_workspace_root(raw.split(";", 1)[0]).rstrip("\\/").lower()
+    return first in PLACEHOLDER_WORKSPACE_ROOTS
 
 
 def run_capture(command: list[str], timeout: int = 20) -> tuple[int, str]:
@@ -654,6 +663,8 @@ class InstallerApp:
                 pass
         env_domain = normalize_ngrok_domain(env_values.get("NGROK_DOMAIN", ""))
         env_workspace = env_values.get("WORKSPACE_ROOTS", "").split(";", 1)[0].strip()
+        if not ENV_FILE.exists() and is_placeholder_workspace_root(env_workspace):
+            env_workspace = ""
         env_ngrok_path = normalize_exe_path(env_values.get("NGROK_PATH", ""))
         self.ngrok_domain_var.set(env_domain if env_domain and env_domain != "your-domain.ngrok-free.dev" else saved_domain)
         self.ngrok_path_var.set(env_ngrok_path or saved_ngrok_path)
@@ -1086,7 +1097,10 @@ class InstallerApp:
         if not token_is_safe(token):
             token = secrets.token_urlsafe(48)
         self.generated_token_var.set(f"Сохранится в .env: {token[:8]}...{token[-6:]}")
-        merged_workspace_roots = merge_workspace_roots(workspace_root, current_values.get("WORKSPACE_ROOTS", ""))
+        existing_workspace_roots = current_values.get("WORKSPACE_ROOTS", "")
+        if not ENV_FILE.exists() or is_placeholder_workspace_root(existing_workspace_roots):
+            existing_workspace_roots = ""
+        merged_workspace_roots = merge_workspace_roots(workspace_root, existing_workspace_roots)
 
         env_text = set_env_value(env_text, "AGENT_TOKEN", token)
         env_text = set_env_value(env_text, "AGENT_HOST", "127.0.0.1")

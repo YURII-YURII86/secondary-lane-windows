@@ -20,6 +20,11 @@ REM Falls back to python.exe if pythonw.exe is not found.
 REM ---------------------------------------------------------------
 
 set "SCRIPT=%~dp0gpts_agent_control.py"
+set "PANEL_LOG=%TEMP%\secondary-lane-panel-startup.log"
+set "PF86=%ProgramFiles(x86)%"
+set "PY313_LOCAL=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+set "PY313_PF=%ProgramFiles%\Python313\python.exe"
+set "PY313_PF86=%PF86%\Python313\python.exe"
 set "PYEXE="
 
 REM --- Try only confirmed Python 3.13. Older/default Python can crash the GUI silently. ---
@@ -47,7 +52,7 @@ if not defined PYEXE (
 )
 
 if not defined PYEXE (
-    for %%P in ("%LOCALAPPDATA%\Programs\Python\Python313\python.exe" "%ProgramFiles%\Python313\python.exe" "%ProgramFiles(x86)%\Python313\python.exe") do (
+    for %%P in ("!PY313_LOCAL!" "!PY313_PF!" "!PY313_PF86!") do (
         if exist "%%~P" (
             "%%~P" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul
             if not errorlevel 1 if not defined PYEXE set "PYEXE=%%~P"
@@ -57,7 +62,11 @@ if not defined PYEXE (
 
 if not defined PYEXE goto :nopython
 
-REM --- Prefer pythonw.exe (no console window) ---
+REM --- Verify the control panel before pythonw.exe hides any startup error. ---
+"!PYEXE!" "%~dp0gpts_agent_control.py" --self-check > "!PANEL_LOG!" 2>&1
+if errorlevel 1 goto :panelfailed
+
+REM --- Prefer pythonw.exe (no console window) after the self-check passes. ---
 set "PYWEXE=!PYEXE:python.exe=pythonw.exe!"
 
 "!PYEXE!" "%~dp0second_lane_installer.py" --needs-repair >nul 2>nul
@@ -89,6 +98,28 @@ echo.
 pause
 goto :eof
 
+:panelfailed
+echo.
+echo =========================================================
+echo   Secondary LANE control panel could not start cleanly.
+echo =========================================================
+echo.
+echo I did NOT close silently. This is the startup log:
+echo   !PANEL_LOG!
+echo.
+if exist "!PANEL_LOG!" (
+    type "!PANEL_LOG!"
+) else (
+    echo Startup log was not created.
+)
+echo.
+echo What to do:
+echo 1. Run "Установить Secondary LANE.bat" once more.
+echo 2. If this repeats, send the startup log to the person helping you.
+echo.
+pause
+goto :eof
+
 :nopython
 echo.
 echo =========================================================
@@ -107,3 +138,4 @@ echo To verify the install, open a new cmd window and run:
 echo   py -3.13 --version
 echo.
 pause
+goto :eof

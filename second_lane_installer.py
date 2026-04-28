@@ -1089,6 +1089,8 @@ class InstallerApp:
         merged_workspace_roots = merge_workspace_roots(workspace_root, current_values.get("WORKSPACE_ROOTS", ""))
 
         env_text = set_env_value(env_text, "AGENT_TOKEN", token)
+        env_text = set_env_value(env_text, "AGENT_HOST", "127.0.0.1")
+        env_text = set_env_value(env_text, "AGENT_PORT", "8787")
         env_text = set_env_value(env_text, "WORKSPACE_ROOTS", merged_workspace_roots)
         env_text = set_env_value(env_text, "ENABLED_PROVIDER_MANIFESTS", str(PROJECT_DIR / "app" / "providers"))
         env_text = set_env_value(env_text, "STATE_DB_PATH", str(PROJECT_DIR / "data" / "agent.db"))
@@ -1215,10 +1217,30 @@ class InstallerApp:
         self.root.mainloop()
 
 
+def installer_self_check() -> int:
+    if tk is None:
+        print("Tkinter is not available. Install the full Python 3.13 Windows installer from python.org.")
+        return 1
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.update_idletasks()
+        root.destroy()
+    except Exception as exc:
+        print(f"Tkinter smoke check failed: {exc}")
+        return 1
+    print("installer self-check ok")
+    return 0
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--needs-repair", action="store_true")
+    parser.add_argument("--self-check", action="store_true")
     args, _ = parser.parse_known_args()
+
+    if args.self_check:
+        raise SystemExit(installer_self_check())
 
     if args.needs_repair:
         raise SystemExit(1 if assess_install_health().needs_repair else 0)

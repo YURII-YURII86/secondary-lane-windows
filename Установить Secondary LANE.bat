@@ -4,39 +4,45 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 set "SCRIPT=%~dp0second_lane_installer.py"
+set "INSTALLER_LOG=%TEMP%\secondary-lane-installer-startup.log"
 set "PYEXE="
-set "PYWEXE="
 
 :resolvepython
 set "PYEXE="
-set "PYWEXE="
 where py >nul 2>nul
-if %errorlevel%==0 (
+if not errorlevel 1 (
     for /f "delims=" %%i in ('py -3.13 -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
-    if not defined PYEXE (
-        for /f "delims=" %%i in ('py -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
-    )
 )
 
 if not defined PYEXE (
     where python >nul 2>nul
-    if %errorlevel%==0 (
-        for /f "delims=" %%i in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
+    if not errorlevel 1 (
+        python -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul
+        if not errorlevel 1 (
+            for /f "delims=" %%i in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
+        )
+    )
+)
+
+if not defined PYEXE (
+    for %%P in ("%LOCALAPPDATA%\Programs\Python\Python313\python.exe" "%ProgramFiles%\Python313\python.exe" "%ProgramFiles(x86)%\Python313\python.exe") do (
+        if exist "%%~P" (
+            "%%~P" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul
+            if not errorlevel 1 if not defined PYEXE set "PYEXE=%%~P"
+        )
     )
 )
 
 if not defined PYEXE goto :nopython
 
-set "PYWEXE=!PYEXE:python.exe=pythonw.exe!"
 "!PYEXE!" -c "import tkinter as tk; root=tk.Tk(); root.withdraw(); root.update_idletasks(); root.destroy()" >nul 2>nul
 if errorlevel 1 goto :notk
 
-if exist "!PYWEXE!" (
-    start "" "!PYWEXE!" "!SCRIPT!"
-    goto :eof
-)
+"!PYEXE!" "!SCRIPT!" --self-check > "!INSTALLER_LOG!" 2>&1
+if errorlevel 1 goto :installerfailed
 
-start "" "!PYEXE!" "!SCRIPT!"
+"!PYEXE!" "!SCRIPT!"
+if errorlevel 1 goto :installerfailed
 goto :eof
 
 :nopython
@@ -74,3 +80,25 @@ start "" "https://www.python.org/downloads/windows/"
 set /p _retrytk="Press Enter to re-check Python GUI, or type Q to quit: "
 if /I "!_retrytk!"=="Q" goto :eof
 goto :resolvepython
+
+:installerfailed
+echo.
+echo =========================================================
+echo   The installer could not start cleanly.
+echo =========================================================
+echo.
+echo I did NOT close silently. This is the startup log:
+echo   !INSTALLER_LOG!
+echo.
+if exist "!INSTALLER_LOG!" (
+    type "!INSTALLER_LOG!"
+) else (
+    echo Startup log was not created.
+)
+echo.
+echo What to do:
+echo 1. Reinstall Python 3.13 from python.org.
+echo 2. Make sure "Add python.exe to PATH" is enabled.
+echo 3. Run this installer again.
+echo.
+pause

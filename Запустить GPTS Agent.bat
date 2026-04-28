@@ -22,20 +22,36 @@ REM ---------------------------------------------------------------
 set "SCRIPT=%~dp0gpts_agent_control.py"
 set "PYEXE="
 
-REM --- Try py launcher (Python 3.13, then default only to open repair flow) ---
+REM --- Try only confirmed Python 3.13. Older/default Python can crash the GUI silently. ---
+if exist "%~dp0.venv\Scripts\python.exe" (
+    "%~dp0.venv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul
+    if not errorlevel 1 set "PYEXE=%~dp0.venv\Scripts\python.exe"
+)
+
 where py >nul 2>nul
-if %errorlevel%==0 (
-    for /f "delims=" %%i in ('py -3.13 -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
-    if not defined PYEXE (
-        for /f "delims=" %%i in ('py -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
+if not defined PYEXE (
+    if not errorlevel 1 (
+        for /f "delims=" %%i in ('py -3.13 -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
     )
 )
 
-REM --- Fallback: plain "python" command ---
+REM --- Fallback: plain "python" only if it is exactly Python 3.13 ---
 if not defined PYEXE (
     where python >nul 2>nul
-    if %errorlevel%==0 (
-        for /f "delims=" %%i in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
+    if not errorlevel 1 (
+        python -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul
+        if not errorlevel 1 (
+            for /f "delims=" %%i in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "PYEXE=%%i"
+        )
+    )
+)
+
+if not defined PYEXE (
+    for %%P in ("%LOCALAPPDATA%\Programs\Python\Python313\python.exe" "%ProgramFiles%\Python313\python.exe" "%ProgramFiles(x86)%\Python313\python.exe") do (
+        if exist "%%~P" (
+            "%%~P" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)" >nul 2>nul
+            if not errorlevel 1 if not defined PYEXE set "PYEXE=%%~P"
+        )
     )
 )
 

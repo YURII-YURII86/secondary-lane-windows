@@ -378,6 +378,8 @@ class ControlPanel:
                 env[key.strip()] = value.strip()
         env["ENABLED_PROVIDER_MANIFESTS"] = str(PROJECT_DIR / "app" / "providers")
         env["STATE_DB_PATH"] = str(PROJECT_DIR / "data" / "agent.db")
+        env["AGENT_HOST"] = "127.0.0.1"
+        env["AGENT_PORT"] = "8787"
         env.setdefault("WORKSPACE_ROOTS", DEFAULT_WORKSPACE_ROOTS)
         return env
 

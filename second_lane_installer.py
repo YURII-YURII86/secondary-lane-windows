@@ -49,7 +49,6 @@ LOCAL_NGROK_EXE = LOCAL_NGROK_DIR / "ngrok.exe"
 PYTHON_DOWNLOAD_URL = "https://www.python.org/downloads/windows/"
 NGROK_DOWNLOAD_URL = "https://ngrok.com/download"
 NGROK_DIRECT_ZIP_URL = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
-NGROK_SIGNUP_URL = "https://dashboard.ngrok.com/signup"
 NGROK_AUTHTOKEN_URL = "https://dashboard.ngrok.com/get-started/your-authtoken"
 NGROK_DOMAINS_URL = "https://dashboard.ngrok.com/cloud-edge/domains"
 WINDOWS_GUIDE_URL = PROJECT_DIR / "docs" / "WINDOWS_FIRST_START.md"
@@ -90,12 +89,29 @@ PALETTE = {
     "shadow": "#e7edf3",
 }
 
+STATUS_ICON = {
+    "pending": "○",
+    "running": "⟳",
+    "done": "✓",
+    "action": "!",
+    "error": "✕",
+}
+
+STATUS_TEXT = {
+    "pending": "Ожидание",
+    "running": "Идёт проверка",
+    "done": "Готово",
+    "action": "Нужно действие",
+    "error": "Ошибка",
+}
+
 
 @dataclass(frozen=True)
 class StepSpec:
     key: str
     title: str
     description: str
+    why: str
 
 
 @dataclass(frozen=True)
@@ -106,15 +122,57 @@ class InstallHealth:
 
 
 STEP_SPECS: list[StepSpec] = [
-    StepSpec("system", "Проверка", "Проверяю Windows, интернет и права записи в эту папку."),
-    StepSpec("python", "Python 3.13", "Проверяю, что установлен нужный Python для запуска проекта."),
-    StepSpec("ngrok", "ngrok", "Проверяю, что ngrok установлен и его можно запустить."),
-    StepSpec("auth", "Ключ ngrok", "Подключаю твой компьютер к аккаунту ngrok через authtoken."),
-    StepSpec("domain", "Домен", "Проверяю домен ngrok, который будет публичным адресом проекта."),
-    StepSpec("env", ".env", "Создаю и заполняю файл настроек проекта."),
-    StepSpec("venv", "Зависимости", "Создаю рабочее окружение Python и ставлю нужные библиотеки."),
-    StepSpec("finish", "Готово", "Подсказываю, что нажать дальше, чтобы запустить панель."),
+    StepSpec(
+        "system",
+        "Проверка Windows",
+        "Проверяю, что это Windows, есть интернет и можно писать файлы в папку проекта.",
+        "Так мы ловим простые проблемы в самом начале, а не оставляем человека с непонятной ошибкой посередине установки.",
+    ),
+    StepSpec(
+        "python",
+        "Python 3.13",
+        "Проверяю официальный Python 3.13. Это программа, на которой запускается Second Lane.",
+        "Нужна одна понятная версия Python, чтобы установка не зависела от случайных старых Python на компьютере.",
+    ),
+    StepSpec(
+        "ngrok",
+        "ngrok",
+        "Проверяю ngrok. Это программа, которая даёт Second Lane защищённый адрес для связи с ChatGPT.",
+        "Без ngrok ChatGPT не сможет достучаться до Second Lane, который работает локально на Windows.",
+    ),
+    StepSpec(
+        "auth",
+        "Вход в ngrok",
+        "Проверяю ключ ngrok. Ключ подтверждает, что ngrok запускается от твоего аккаунта.",
+        "Это один из немногих шагов, где нужен человек: нужно войти в ngrok и вставить ключ.",
+    ),
+    StepSpec(
+        "domain",
+        "Адрес ngrok",
+        "Проверяю reserved domain ngrok. Это постоянный публичный адрес для подключения GPT.",
+        "Постоянный адрес нужен, чтобы после перезапуска Windows не приходилось каждый раз заново менять настройки GPT.",
+    ),
+    StepSpec(
+        "env",
+        "Файл настроек Second Lane",
+        "Создаю .env: адрес ngrok, секретный ключ доступа и папку, к которой можно дать доступ.",
+        "Мастер заполняет опасные и технические поля сам, чтобы человек не копировал шаблоны и случайно не открывал лишние папки.",
+    ),
+    StepSpec(
+        "venv",
+        "Локальная рабочая папка Python",
+        "Создаю отдельное окружение Python и ставлю туда нужные библиотеки.",
+        "Так Second Lane не ломает другие программы на Windows и не зависит от чужих библиотек в системе.",
+    ),
+    StepSpec(
+        "finish",
+        "Готово",
+        "Подсказываю, что нажать дальше, чтобы запустить панель Second Lane.",
+        "Последний шаг уже не про установку, а про спокойный запуск и подключение к GPT Actions.",
+    ),
 ]
+
+STEP_BY_KEY = {spec.key: spec for spec in STEP_SPECS}
 
 
 def internet_available() -> bool:
@@ -527,12 +585,20 @@ class InstallerApp:
         self.root.configure(bg=PALETTE["app_bg"])
 
         self.status_var = tk.StringVar(value="Готов помочь с установкой или ремонтом")
-        self.primary_button_text = tk.StringVar(value="Проверить, установить или починить всё")
+        self.primary_button_text = tk.StringVar(value="Начать установку")
+        self.secondary_button_text = tk.StringVar(value="Что это значит?")
+        self.current_step_title_var = tk.StringVar(value="")
+        self.current_step_desc_var = tk.StringVar(value="")
+        self.current_step_why_var = tk.StringVar(value="")
+        self.current_action_hint_var = tk.StringVar(value="")
+        self.current_command_var = tk.StringVar(value="Внутреннее действие мастера: —")
         self.ngrok_token_var = tk.StringVar(value="")
         self.ngrok_domain_var = tk.StringVar(value="")
         self.ngrok_path_var = tk.StringVar(value="")
         self.workspace_root_var = tk.StringVar(value=DEFAULT_WORKSPACE_ROOT)
         self.generated_token_var = tk.StringVar(value="")
+        self.current_step_key = STEP_SPECS[0].key
+        self.step_status: dict[str, str] = {spec.key: "pending" for spec in STEP_SPECS}
         self.step_vars: dict[str, tk.StringVar] = {
             spec.key: tk.StringVar(value="○ Ожидание") for spec in STEP_SPECS
         }
@@ -577,8 +643,9 @@ class InstallerApp:
 
         self._build_steps_card(left)
         self._build_actions_card(left)
-        self._build_inputs_card(right)
+        self._build_current_step_card(right)
         self._build_log_card(right)
+        self._refresh_current_step_card()
 
     def _build_steps_card(self, parent: tk.Frame) -> None:
         card = tk.Frame(parent, bg=PALETTE["surface"], highlightbackground=PALETTE["border"], highlightthickness=1, padx=16, pady=16)
@@ -595,33 +662,18 @@ class InstallerApp:
     def _build_actions_card(self, parent: tk.Frame) -> None:
         card = tk.Frame(parent, bg=PALETTE["surface"], highlightbackground=PALETTE["border"], highlightthickness=1, padx=16, pady=16)
         card.pack(fill=BOTH, expand=True)
-        tk.Label(card, text="Быстрые кнопки", font=("Segoe UI", 13, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
-        tk.Label(card, text="Они нужны, когда мастер просит живое действие с твоей стороны.", font=("Segoe UI", 10), bg=PALETTE["surface"], fg=PALETTE["muted"], wraplength=300, justify=LEFT).pack(anchor="w", pady=(4, 12))
-
-        self.primary_button = tk.Button(
+        tk.Label(card, text="Помощь", font=("Segoe UI", 13, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
+        tk.Label(
             card,
-            textvariable=self.primary_button_text,
-            command=self.start_install,
-            font=("Segoe UI", 11, "bold"),
-            bg=PALETTE["accent"],
-            fg="white",
-            activebackground=PALETTE["text"],
-            activeforeground="white",
-            relief="flat",
-            bd=0,
-            padx=12,
-            pady=8,
-            cursor="hand2",
-        )
-        self.primary_button.pack(fill=X, pady=(0, 10))
+            text="Эти кнопки остаются под рукой, но мастер сам скажет, какая нужна сейчас.",
+            font=("Segoe UI", 10),
+            bg=PALETTE["surface"],
+            fg=PALETTE["muted"],
+            wraplength=300,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(4, 12))
 
         buttons = [
-            ("Открыть Python 3.13", lambda: self.open_external(PYTHON_DOWNLOAD_URL)),
-            ("Поставить ngrok автоматически", self.install_ngrok_auto),
-            ("Открыть ngrok download", lambda: self.open_external(NGROK_DOWNLOAD_URL)),
-            ("Открыть ngrok signup", lambda: self.open_external(NGROK_SIGNUP_URL)),
-            ("Открыть authtoken page", lambda: self.open_external(NGROK_AUTHTOKEN_URL)),
-            ("Открыть domains page", lambda: self.open_external(NGROK_DOMAINS_URL)),
             ("Открыть большую инструкцию", self.open_guide),
             ("Открыть папку проекта", self.open_project_folder),
             ("Запустить панель", self.launch_control_panel),
@@ -643,25 +695,124 @@ class InstallerApp:
                 cursor="hand2",
             ).pack(fill=X, pady=4)
 
-    def _build_inputs_card(self, parent: tk.Frame) -> None:
+    def _build_current_step_card(self, parent: tk.Frame) -> None:
         card = tk.Frame(parent, bg=PALETTE["surface"], highlightbackground=PALETTE["border"], highlightthickness=1, padx=18, pady=16)
         card.pack(fill=X, pady=(0, 12))
 
-        tk.Label(card, text="Что нужно от тебя", font=("Segoe UI", 13, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
-        tk.Label(card, text="Обычно человек нужен только для данных от ngrok и выбора папки, которую GPT сможет видеть.", font=("Segoe UI", 10), bg=PALETTE["surface"], fg=PALETTE["muted"], wraplength=760, justify=LEFT).pack(anchor="w", pady=(4, 12))
+        tk.Label(card, text="Что сейчас делает мастер", font=("Segoe UI", 13, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
+        tk.Label(card, textvariable=self.current_step_title_var, font=("Segoe UI", 16, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w", pady=(12, 0))
+        tk.Label(
+            card,
+            textvariable=self.current_step_desc_var,
+            font=("Segoe UI", 10),
+            bg=PALETTE["surface"],
+            fg=PALETTE["text"],
+            wraplength=780,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(8, 0))
+        tk.Label(
+            card,
+            textvariable=self.current_step_why_var,
+            font=("Segoe UI", 9),
+            bg=PALETTE["surface"],
+            fg=PALETTE["muted"],
+            wraplength=780,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(8, 0))
 
-        self._field(card, "Authtoken ngrok", self.ngrok_token_var, "Скопируй из dashboard.ngrok.com/get-started/your-authtoken")
-        self._field(card, "Reserved domain ngrok", self.ngrok_domain_var, "Например: my-team.ngrok-free.dev")
+        self.action_hint_box = tk.Frame(card, bg=PALETTE["panel"], highlightbackground=PALETTE["border"], highlightthickness=1, padx=12, pady=10)
+        tk.Label(self.action_hint_box, text="Что нужно сделать", font=("Segoe UI", 10, "bold"), bg=PALETTE["panel"], fg=PALETTE["text"]).pack(anchor="w")
+        tk.Label(
+            self.action_hint_box,
+            textvariable=self.current_action_hint_var,
+            font=("Segoe UI", 9),
+            bg=PALETTE["panel"],
+            fg=PALETTE["text"],
+            wraplength=760,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(4, 0))
 
-        ngrok_wrap = tk.Frame(card, bg=PALETTE["surface"])
-        ngrok_wrap.pack(fill=X, pady=6)
-        tk.Label(ngrok_wrap, text="Путь к ngrok.exe, если Windows не нашла его сама", font=("Segoe UI", 10, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
-        tk.Label(ngrok_wrap, text="Обычно это поле можно оставить пустым. Оно нужно только после ручной распаковки ngrok.", font=("Segoe UI", 9), bg=PALETTE["surface"], fg=PALETTE["muted"], wraplength=760, justify=LEFT).pack(anchor="w", pady=(2, 6))
-        ngrok_row = tk.Frame(ngrok_wrap, bg=PALETTE["surface"])
-        ngrok_row.pack(fill=X)
-        tk.Entry(ngrok_row, textvariable=self.ngrok_path_var, font=("Consolas", 10), relief="solid", bd=1).pack(side=LEFT, fill=X, expand=True)
+        self.input_frame = tk.Frame(card, bg=PALETTE["surface"])
+        self.input_frame.pack(fill=X, pady=(8, 0))
+
+        self.ngrok_token_row = tk.Frame(self.input_frame, bg=PALETTE["surface"])
+        tk.Label(self.ngrok_token_row, text="Ключ ngrok", font=("Segoe UI", 10, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
+        tk.Label(
+            self.ngrok_token_row,
+            text="Скопируй длинный authtoken из кабинета ngrok и вставь его сюда.",
+            font=("Segoe UI", 9),
+            bg=PALETTE["surface"],
+            fg=PALETTE["muted"],
+            wraplength=760,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(2, 6))
+        token_entry_row = tk.Frame(self.ngrok_token_row, bg=PALETTE["surface"])
+        token_entry_row.pack(fill=X)
+        self.ngrok_token_entry = tk.Entry(token_entry_row, textvariable=self.ngrok_token_var, font=("Consolas", 10), show="*", relief="solid", bd=1)
+        self.ngrok_token_entry.pack(side=LEFT, fill=X, expand=True)
         tk.Button(
-            ngrok_row,
+            token_entry_row,
+            text="Вставить",
+            command=self.paste_ngrok_token,
+            font=("Segoe UI", 10),
+            bg=PALETTE["accent_soft"],
+            fg=PALETTE["text"],
+            activebackground=PALETTE["panel"],
+            activeforeground=PALETTE["text"],
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=6,
+            cursor="hand2",
+        ).pack(side=RIGHT, padx=(8, 0))
+
+        self.ngrok_domain_row = tk.Frame(self.input_frame, bg=PALETTE["surface"])
+        tk.Label(self.ngrok_domain_row, text="Адрес ngrok", font=("Segoe UI", 10, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
+        tk.Label(
+            self.ngrok_domain_row,
+            text="Например: my-team.ngrok-free.dev. Вставляй без https:// и без лишних символов.",
+            font=("Segoe UI", 9),
+            bg=PALETTE["surface"],
+            fg=PALETTE["muted"],
+            wraplength=760,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(2, 6))
+        domain_entry_row = tk.Frame(self.ngrok_domain_row, bg=PALETTE["surface"])
+        domain_entry_row.pack(fill=X)
+        self.ngrok_domain_entry = tk.Entry(domain_entry_row, textvariable=self.ngrok_domain_var, font=("Consolas", 10), relief="solid", bd=1)
+        self.ngrok_domain_entry.pack(side=LEFT, fill=X, expand=True)
+        tk.Button(
+            domain_entry_row,
+            text="Вставить",
+            command=self.paste_ngrok_domain,
+            font=("Segoe UI", 10),
+            bg=PALETTE["accent_soft"],
+            fg=PALETTE["text"],
+            activebackground=PALETTE["panel"],
+            activeforeground=PALETTE["text"],
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=6,
+            cursor="hand2",
+        ).pack(side=RIGHT, padx=(8, 0))
+
+        self.ngrok_path_row = tk.Frame(self.input_frame, bg=PALETTE["surface"])
+        tk.Label(self.ngrok_path_row, text="Путь к ngrok.exe", font=("Segoe UI", 10, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
+        tk.Label(
+            self.ngrok_path_row,
+            text="Обычно это поле не нужно. Оно появляется только если Windows не смогла сама найти ngrok.",
+            font=("Segoe UI", 9),
+            bg=PALETTE["surface"],
+            fg=PALETTE["muted"],
+            wraplength=760,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(2, 6))
+        ngrok_entry_row = tk.Frame(self.ngrok_path_row, bg=PALETTE["surface"])
+        ngrok_entry_row.pack(fill=X)
+        tk.Entry(ngrok_entry_row, textvariable=self.ngrok_path_var, font=("Consolas", 10), relief="solid", bd=1).pack(side=LEFT, fill=X, expand=True)
+        tk.Button(
+            ngrok_entry_row,
             text="Выбрать ngrok.exe",
             command=self.choose_ngrok_exe,
             font=("Segoe UI", 10),
@@ -676,16 +827,23 @@ class InstallerApp:
             cursor="hand2",
         ).pack(side=RIGHT, padx=(8, 0))
 
-        workspace_wrap = tk.Frame(card, bg=PALETTE["surface"])
-        workspace_wrap.pack(fill=X, pady=6)
-        tk.Label(workspace_wrap, text="Главная папка проекта", font=("Segoe UI", 10, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
-        tk.Label(workspace_wrap, text="Это первая папка, к которой GPT получит доступ. Самый безопасный вариант: оставить текущую папку проекта.", font=("Segoe UI", 9), bg=PALETTE["surface"], fg=PALETTE["muted"], wraplength=760, justify=LEFT).pack(anchor="w", pady=(2, 6))
-        row = tk.Frame(workspace_wrap, bg=PALETTE["surface"])
-        row.pack(fill=X)
-        entry = tk.Entry(row, textvariable=self.workspace_root_var, font=("Consolas", 10), relief="solid", bd=1)
+        self.workspace_row = tk.Frame(self.input_frame, bg=PALETTE["surface"])
+        tk.Label(self.workspace_row, text="Главная папка проекта", font=("Segoe UI", 10, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
+        tk.Label(
+            self.workspace_row,
+            text="Это первая папка, к которой GPT получит доступ. Самый безопасный вариант: оставить текущую папку проекта.",
+            font=("Segoe UI", 9),
+            bg=PALETTE["surface"],
+            fg=PALETTE["muted"],
+            wraplength=760,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(2, 6))
+        workspace_entry_row = tk.Frame(self.workspace_row, bg=PALETTE["surface"])
+        workspace_entry_row.pack(fill=X)
+        entry = tk.Entry(workspace_entry_row, textvariable=self.workspace_root_var, font=("Consolas", 10), relief="solid", bd=1)
         entry.pack(side=LEFT, fill=X, expand=True)
         tk.Button(
-            row,
+            workspace_entry_row,
             text="Выбрать папку",
             command=self.choose_workspace,
             font=("Segoe UI", 10),
@@ -700,11 +858,10 @@ class InstallerApp:
             cursor="hand2",
         ).pack(side=RIGHT, padx=(8, 0))
 
-        token_box = tk.Frame(card, bg=PALETTE["panel"], highlightbackground=PALETTE["border"], highlightthickness=1, padx=12, pady=10)
-        token_box.pack(fill=X, pady=(12, 0))
-        tk.Label(token_box, text="AGENT_TOKEN мастер создаст сам", font=("Segoe UI", 10, "bold"), bg=PALETTE["panel"], fg=PALETTE["text"]).pack(anchor="w")
+        self.token_box = tk.Frame(card, bg=PALETTE["panel"], highlightbackground=PALETTE["border"], highlightthickness=1, padx=12, pady=10)
+        tk.Label(self.token_box, text="AGENT_TOKEN мастер создаст сам", font=("Segoe UI", 10, "bold"), bg=PALETTE["panel"], fg=PALETTE["text"]).pack(anchor="w")
         tk.Label(
-            token_box,
+            self.token_box,
             text="Это секретный ключ для твоего GPT. После установки он сохранится в .env. Если в проекте уже есть хороший токен, мастер его не сломает.",
             font=("Segoe UI", 9),
             bg=PALETTE["panel"],
@@ -712,15 +869,218 @@ class InstallerApp:
             wraplength=760,
             justify=LEFT,
         ).pack(anchor="w", pady=(2, 6))
-        tk.Label(token_box, textvariable=self.generated_token_var, font=("Consolas", 10), bg=PALETTE["panel"], fg=PALETTE["text"]).pack(anchor="w")
+        tk.Label(self.token_box, textvariable=self.generated_token_var, font=("Consolas", 10), bg=PALETTE["panel"], fg=PALETTE["text"]).pack(anchor="w")
 
-    def _field(self, parent: tk.Frame, title: str, variable: tk.StringVar, hint: str) -> None:
-        wrap = tk.Frame(parent, bg=PALETTE["surface"])
-        wrap.pack(fill=X, pady=6)
-        tk.Label(wrap, text=title, font=("Segoe UI", 10, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
-        tk.Label(wrap, text=hint, font=("Segoe UI", 9), bg=PALETTE["surface"], fg=PALETTE["muted"]).pack(anchor="w", pady=(2, 6))
-        show = "*" if "token" in title.lower() else ""
-        tk.Entry(wrap, textvariable=variable, font=("Consolas", 10), show=show, relief="solid", bd=1).pack(fill=X)
+        button_row = tk.Frame(card, bg=PALETTE["surface"])
+        button_row.pack(fill=X, pady=(14, 0))
+        self.primary_button = tk.Button(
+            button_row,
+            textvariable=self.primary_button_text,
+            command=self.start_install,
+            font=("Segoe UI", 11, "bold"),
+            bg=PALETTE["accent"],
+            fg="white",
+            activebackground=PALETTE["text"],
+            activeforeground="white",
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=8,
+            cursor="hand2",
+        )
+        self.primary_button.pack(side=LEFT)
+        self.secondary_button = tk.Button(
+            button_row,
+            textvariable=self.secondary_button_text,
+            command=self.on_secondary_action,
+            font=("Segoe UI", 10),
+            bg=PALETTE["accent_soft"],
+            fg=PALETTE["text"],
+            activebackground=PALETTE["panel"],
+            activeforeground=PALETTE["text"],
+            relief="flat",
+            bd=0,
+            padx=12,
+            pady=8,
+            cursor="hand2",
+        )
+        self.secondary_button.pack(side=LEFT, padx=(10, 0))
+
+        tk.Label(
+            card,
+            textvariable=self.current_command_var,
+            font=("Segoe UI", 9, "bold"),
+            bg=PALETTE["surface"],
+            fg=PALETTE["text"],
+            wraplength=780,
+            justify=LEFT,
+        ).pack(anchor="w", pady=(12, 0))
+
+    def _set_packed(self, widget: tk.Widget, should_show: bool, **pack_options) -> None:
+        is_visible = bool(widget.winfo_manager())
+        if should_show and not is_visible:
+            widget.pack(**pack_options)
+        elif not should_show and is_visible:
+            widget.pack_forget()
+
+    def _current_step_index(self) -> int:
+        for idx, spec in enumerate(STEP_SPECS):
+            if spec.key == self.current_step_key:
+                return idx
+        return 0
+
+    def _refresh_current_step_card(self) -> None:
+        idx = self._current_step_index()
+        spec = STEP_SPECS[idx]
+        status = self.step_status.get(spec.key, "pending")
+
+        self.current_step_title_var.set(f"{idx + 1}. {spec.title}")
+        self.current_step_desc_var.set(spec.description)
+        self.current_step_why_var.set(f"Зачем: {spec.why}")
+        self.current_command_var.set(
+            f"Внутреннее действие мастера: {spec.title} — {STATUS_TEXT.get(status, 'Ожидание')}"
+        )
+
+        show_hint = False
+        hint = ""
+        show_token = False
+        show_domain = False
+        show_ngrok_path = False
+        show_workspace = False
+        show_token_box = spec.key in {"env", "finish"}
+
+        self.secondary_button_text.set("Что это значит?")
+        if self.busy:
+            self.primary_button_text.set("Работаю...")
+        elif status == "action":
+            show_hint = True
+            if spec.key == "system":
+                hint = (
+                    "Мастер не смог уверенно проверить базовые вещи. Если сайты в браузере открываются, "
+                    "просто нажми «Проверить снова». Если ошибка повторится, открой журнал ниже и скопируй его."
+                )
+                self.primary_button_text.set("Проверить снова")
+                self.secondary_button_text.set("Открыть ChatGPT")
+            elif spec.key == "python":
+                hint = (
+                    "Нужен официальный Python 3.13 для Windows. Нажми «Открыть Python 3.13», "
+                    "скачай Windows installer 64-bit и при установке включи Add python.exe to PATH."
+                )
+                self.primary_button_text.set("Проверить Python снова")
+                self.secondary_button_text.set("Открыть Python 3.13")
+            elif spec.key == "ngrok":
+                hint = (
+                    "Мастер уже попробовал поставить ngrok автоматически. Если Windows всё равно его не видит, "
+                    "открой ngrok download, распакуй файл и выбери ngrok.exe вручную ниже."
+                )
+                show_ngrok_path = True
+                self.primary_button_text.set("Проверить ngrok снова")
+                self.secondary_button_text.set("Открыть ngrok download")
+            elif spec.key == "auth":
+                hint = (
+                    "Нужно одно ручное действие: получить ключ ngrok и вставить его в поле ниже. "
+                    "Открой страницу authtoken, скопируй длинный ключ целиком и нажми «Сохранить ключ и продолжить»."
+                )
+                show_token = True
+                self.primary_button_text.set("Сохранить ключ и продолжить")
+                self.secondary_button_text.set("Открыть authtoken")
+            elif spec.key == "domain":
+                hint = (
+                    "Вставь reserved domain ngrok. Он выглядит примерно так: my-team.ngrok-free.dev. "
+                    "Если адреса ещё нет, открой страницу Domains и создай бесплатный статический адрес."
+                )
+                show_domain = True
+                self.primary_button_text.set("Сохранить адрес и продолжить")
+                self.secondary_button_text.set("Открыть domains")
+            elif spec.key == "env":
+                hint = (
+                    "Проверь главную папку проекта. Это папка, которую GPT сможет видеть. "
+                    "Для безопасного простого старта лучше оставить текущую папку проекта."
+                )
+                show_workspace = True
+                show_token_box = True
+                self.primary_button_text.set("Сохранить папку и продолжить")
+                self.secondary_button_text.set("Выбрать папку")
+            else:
+                hint = "Мастер остановился, чтобы не делать опасных догадок. Посмотри журнал ниже и нажми «Попробовать снова»."
+                self.primary_button_text.set("Попробовать снова")
+        elif spec.key == "finish" and status == "done":
+            show_hint = True
+            hint = (
+                "Установка завершена. Нажми «Запустить панель», дождись строки про активный туннель "
+                "и только после этого подключай openapi.gpts.yaml в GPT Actions."
+            )
+            show_token_box = True
+            self.primary_button_text.set("Запустить панель")
+            self.secondary_button_text.set("Открыть инструкцию")
+        else:
+            if status == "error":
+                show_hint = True
+                hint = "Этот шаг завершился ошибкой. Посмотри журнал ниже и нажми «Попробовать снова»."
+                self.primary_button_text.set("Попробовать снова")
+            elif idx == 0 and status == "pending":
+                self.primary_button_text.set("Начать установку")
+            else:
+                self.primary_button_text.set("Продолжить")
+
+        self.current_action_hint_var.set(hint)
+        self._set_packed(self.action_hint_box, show_hint, fill=X, pady=(12, 4), before=self.input_frame)
+        self._set_packed(self.ngrok_token_row, show_token, fill=X, pady=(8, 4))
+        self._set_packed(self.ngrok_domain_row, show_domain, fill=X, pady=(8, 4))
+        self._set_packed(self.ngrok_path_row, show_ngrok_path, fill=X, pady=(8, 4))
+        self._set_packed(self.workspace_row, show_workspace, fill=X, pady=(8, 4))
+        self._set_packed(self.token_box, show_token_box, fill=X, pady=(12, 0), before=self.primary_button.master)
+
+        button_state = "disabled" if self.busy else "normal"
+        self.primary_button.configure(state=button_state)
+        self.secondary_button.configure(state=button_state)
+
+    def paste_ngrok_token(self) -> None:
+        text = normalize_ngrok_token(self._clipboard_text())
+        if not text:
+            self.write_log("В буфере обмена не вижу ключ ngrok. Сначала скопируй authtoken на сайте ngrok.\n")
+            return
+        self.ngrok_token_var.set(text)
+        self.ngrok_token_entry.focus_set()
+        self.ngrok_token_entry.icursor(END)
+
+    def paste_ngrok_domain(self) -> None:
+        text = normalize_ngrok_domain(self._clipboard_text())
+        if not text:
+            self.write_log("В буфере обмена не вижу адрес ngrok. Сначала скопируй reserved domain в кабинете ngrok.\n")
+            return
+        self.ngrok_domain_var.set(text)
+        self.ngrok_domain_entry.focus_set()
+        self.ngrok_domain_entry.icursor(END)
+
+    def _clipboard_text(self) -> str:
+        try:
+            return self.root.clipboard_get()
+        except tk.TclError:
+            return ""
+
+    def on_secondary_action(self) -> None:
+        key = self.current_step_key
+        status = self.step_status.get(key, "pending")
+        if status != "action" and not (key == "finish" and status == "done"):
+            self.write_log(f"{STEP_BY_KEY.get(key, STEP_SPECS[0]).title}: {STEP_BY_KEY.get(key, STEP_SPECS[0]).why}\n")
+            return
+        if key == "system":
+            self.open_external("https://chatgpt.com")
+        elif key == "python":
+            self.open_external(PYTHON_DOWNLOAD_URL)
+        elif key == "ngrok":
+            self.open_external(NGROK_DOWNLOAD_URL)
+        elif key == "auth":
+            self.open_external(NGROK_AUTHTOKEN_URL)
+        elif key == "domain":
+            self.open_external(NGROK_DOMAINS_URL)
+        elif key == "env":
+            self.choose_workspace()
+        elif key == "finish":
+            self.open_guide()
+        else:
+            self.open_guide()
 
     def _build_log_card(self, parent: tk.Frame) -> None:
         card = tk.Frame(parent, bg=PALETTE["surface"], highlightbackground=PALETTE["border"], highlightthickness=1, padx=16, pady=14)
@@ -807,16 +1167,22 @@ class InstallerApp:
             for issue in health.issues:
                 self.write_log(f"- {issue}\n")
             self.write_log(
-                "\nНажми «Проверить, установить или починить всё».\n"
+                "\nНажми «Начать установку».\n"
                 "Мастер постарается сам довести состояние до рабочего.\n"
             )
         else:
+            for spec in STEP_SPECS:
+                self.step_status[spec.key] = "done"
+                self.step_vars[spec.key].set("✓ Готово")
+            self.current_step_key = "finish"
             self.write_log(
                 "Критичных проблем не вижу.\n"
                 "Можешь использовать кнопку как перепроверку или быстрый repair-pass.\n"
             )
+        self._refresh_current_step_card()
 
     def _poll_worker_queue(self) -> None:
+        should_refresh = False
         while True:
             try:
                 kind, payload = self.worker_queue.get_nowait()
@@ -830,11 +1196,24 @@ class InstallerApp:
             elif kind.startswith("step:"):
                 _, key = kind.split(":", 1)
                 self.step_vars[key].set(payload)
+                should_refresh = True
+            elif kind.startswith("step_state:"):
+                _, key = kind.split(":", 1)
+                self.step_status[key] = payload
+                if payload in {"running", "action", "error"}:
+                    self.current_step_key = key
+                elif payload == "done":
+                    if key == "finish":
+                        self.current_step_key = key
+                    elif self.current_step_key == key:
+                        next_idx = min(self._current_step_index() + 1, len(STEP_SPECS) - 1)
+                        self.current_step_key = STEP_SPECS[next_idx].key
+                should_refresh = True
             elif kind == "busy":
-                is_busy = payload == "1"
-                self.busy = is_busy
-                self.primary_button.configure(state="disabled" if is_busy else "normal")
-                self.primary_button_text.set("Работаю..." if is_busy else "Проверить и настроить всё")
+                self.busy = payload == "1"
+                should_refresh = True
+        if should_refresh:
+            self._refresh_current_step_card()
         self.root.after(120, self._poll_worker_queue)
 
     def write_log(self, text: str) -> None:
@@ -844,14 +1223,8 @@ class InstallerApp:
         self.worker_queue.put(("status", text))
 
     def set_step(self, key: str, status: str, detail: str = "") -> None:
-        icons = {
-            "pending": "○",
-            "running": "⟳",
-            "done": "✓",
-            "action": "!",
-            "error": "✕",
-        }
-        text = f"{icons.get(status, '○')} {detail or status}"
+        text = f"{STATUS_ICON.get(status, '○')} {detail or STATUS_TEXT.get(status, status)}"
+        self.worker_queue.put((f"step_state:{key}", status))
         self.worker_queue.put((f"step:{key}", text))
 
     def choose_workspace(self) -> None:
@@ -883,45 +1256,6 @@ class InstallerApp:
         self.ngrok_path_var.set(str(candidate))
         self._save_state()
         self.write_log(f"Сохранил путь к ngrok.exe: {candidate}\n")
-
-    def install_ngrok_auto(self) -> None:
-        if self.busy:
-            self.write_log("Сейчас уже идёт установка. Дождись завершения текущего шага.\n")
-            return
-        self.worker_queue.put(("busy", "1"))
-        threading.Thread(target=self._install_ngrok_auto_worker, daemon=True).start()
-
-    def _install_ngrok_auto_worker(self) -> None:
-        try:
-            self.set_step("ngrok", "running", "Ставлю автоматически")
-            self.set_status("Пробую поставить ngrok автоматически")
-            ok, detail = install_ngrok_automatically()
-            if not ok:
-                self.set_step("ngrok", "action", "Нужна ручная установка")
-                self.set_status("Автоустановка ngrok не сработала")
-                self.write_log(
-                    "Автоустановка ngrok не завершилась ни через winget, ни прямым скачиванием zip.\n"
-                    f"Что произошло: {detail[:1200]}\n"
-                    "Запасной путь: нажми «Открыть ngrok download», распакуй ngrok.exe и укажи его через «Выбрать ngrok.exe».\n"
-                )
-                self.open_external(NGROK_DOWNLOAD_URL)
-                return
-            ngrok_path = find_ngrok_path()
-            if not ngrok_path:
-                self.set_step("ngrok", "action", "Путь ещё не найден")
-                self.set_status("ngrok установлен, но Windows пока не отдаёт путь")
-                self.write_log(
-                    "Автоустановка завершилась успешно, но мастер пока не видит ngrok.exe.\n"
-                    "Попробуй закрыть и открыть мастер заново или укажи файл через «Выбрать ngrok.exe».\n"
-                )
-                return
-            self.ngrok_path_var.set(ngrok_path)
-            self._save_state()
-            self.set_step("ngrok", "done", f"Найден: {ngrok_path}")
-            self.set_status("ngrok установлен")
-            self.write_log(f"ngrok готов: {ngrok_path}\n")
-        finally:
-            self.worker_queue.put(("busy", "0"))
 
     def open_external(self, url: str) -> None:
         webbrowser.open(url)
@@ -963,7 +1297,12 @@ class InstallerApp:
     def start_install(self) -> None:
         if self.busy:
             return
+        if self.current_step_key == "finish" and self.step_status.get("finish") == "done":
+            self.launch_control_panel()
+            return
         self._save_state()
+        self.current_step_key = "system"
+        self._refresh_current_step_card()
         self.worker_queue.put(("busy", "1"))
         threading.Thread(target=self._install_worker, daemon=True).start()
 
@@ -1100,7 +1439,7 @@ class InstallerApp:
                 "Что сделать сейчас:\n"
                 "1. Нажми «Открыть authtoken page».\n"
                 "2. Скопируй authtoken из кабинета ngrok.\n"
-                "3. Вставь его в поле «Authtoken ngrok» сверху.\n"
+                "3. Вставь его в поле ключа, которое показал мастер.\n"
                 "4. Снова нажми главную кнопку.\n"
             )
             return False
@@ -1147,7 +1486,7 @@ class InstallerApp:
                 "Что сделать сейчас:\n"
                 "1. Нажми «Открыть domains page».\n"
                 "2. Создай бесплатный reserved domain.\n"
-                "3. Вставь его в поле «Reserved domain ngrok» без https://.\n"
+                "3. Вставь его в поле адреса, которое показал мастер, без https://.\n"
                 "4. Снова нажми главную кнопку.\n"
             )
             return None

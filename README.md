@@ -125,11 +125,11 @@ The easiest path now is:
 
 1. Put the project folder somewhere simple, for example `C:\SecondLane`
 2. Double-click `Установить Secondary LANE.bat`
-3. Follow the installer window
+3. Follow the installer window one step at a time
 4. If Python is missing, the installer downloads the official Python 3.13 installer, opens it, and then retries
 5. When the installer finishes, it opens the panel for you or leaves a clear `Запустить панель` button
 
-The installer checks Python 3.13, helps with ngrok, creates `.env`, prepares `.venv`, repairs broken local setup, and leaves only the truly human steps to you.
+The installer is intentionally step-by-step: it checks Python 3.13, helps with ngrok, creates `.env`, prepares `.venv`, repairs broken local setup, and shows input fields only when that exact step needs them.
 
 If you prefer another route, here are the options.
 
@@ -148,7 +148,7 @@ If you want the simplest beginner-friendly route, start here.
 1. Double-click `Установить Secondary LANE.bat`
 2. If Python is missing, the installer downloads the official Python 3.13 Windows installer and opens it for you
 3. If ngrok is missing, the installer tries `winget`, then a direct official ngrok zip download; if Windows still cannot find it, choose `ngrok.exe` in the installer
-4. Paste your ngrok authtoken and reserved domain into the installer
+4. Paste your ngrok authtoken and reserved domain only when the installer asks for them
 5. Let it prepare or repair `.env` and `.venv`
 6. Let it open the panel for you, or click `Запустить панель` if Windows asks you to confirm the launch
 

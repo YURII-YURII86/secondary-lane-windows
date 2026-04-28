@@ -27,6 +27,7 @@ venv/
 # Runtime data
 *.log
 data/*.db
+tools/
 
 # Local project memory and generated state
 .ai_context/

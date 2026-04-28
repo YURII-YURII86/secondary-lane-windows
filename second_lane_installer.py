@@ -14,6 +14,7 @@ import threading
 import urllib.error
 import urllib.request
 import webbrowser
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,9 +42,13 @@ LAUNCHER_FILE = PROJECT_DIR / "Запустить GPTS Agent.bat"
 DEFAULT_WORKSPACE_ROOT = str(PROJECT_DIR)
 VENV_PYTHON = VENV_DIR / "Scripts" / "python.exe"
 VENV_UVICORN = VENV_DIR / "Scripts" / "uvicorn.exe"
+TOOLS_DIR = PROJECT_DIR / "tools"
+LOCAL_NGROK_DIR = TOOLS_DIR / "ngrok"
+LOCAL_NGROK_EXE = LOCAL_NGROK_DIR / "ngrok.exe"
 
 PYTHON_DOWNLOAD_URL = "https://www.python.org/downloads/windows/"
 NGROK_DOWNLOAD_URL = "https://ngrok.com/download"
+NGROK_DIRECT_ZIP_URL = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
 NGROK_SIGNUP_URL = "https://dashboard.ngrok.com/signup"
 NGROK_AUTHTOKEN_URL = "https://dashboard.ngrok.com/get-started/your-authtoken"
 NGROK_DOMAINS_URL = "https://dashboard.ngrok.com/cloud-edge/domains"
@@ -113,6 +118,41 @@ STEP_SPECS: list[StepSpec] = [
 
 
 def internet_available() -> bool:
+    for url in INTERNET_CHECK_URLS:
+        try:
+            result = subprocess.run(
+                ["curl.exe", "-fsSL", "--connect-timeout", "5", "--max-time", "10", "-o", "NUL", url],
+                cwd=PROJECT_DIR,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=12,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0:
+            return True
+
+    if os.name == "nt" and shutil.which("powershell"):
+        script = (
+            "$ProgressPreference='SilentlyContinue'; "
+            "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; "
+            "try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 8 -Uri $args[0] | Out-Null; exit 0 } "
+            "catch { exit 1 }"
+        )
+        for url in INTERNET_CHECK_URLS:
+            try:
+                result = subprocess.run(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script, url],
+                    cwd=PROJECT_DIR,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=12,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            if result.returncode == 0:
+                return True
+
     for url in INTERNET_CHECK_URLS:
         try:
             request = urllib.request.Request(url, headers={"User-Agent": "Second Lane Installer"})
@@ -217,6 +257,37 @@ def run_capture(command: list[str], timeout: int = 20) -> tuple[int, str]:
     return result.returncode, (result.stdout or "").strip()
 
 
+def download_file(url: str, destination: Path, timeout: int = 180) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    last_error = ""
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "Second Lane Installer"})
+        with urllib.request.urlopen(request, timeout=timeout) as response, destination.open("wb") as handle:
+            shutil.copyfileobj(response, handle)
+        return
+    except (OSError, TimeoutError, urllib.error.URLError) as exc:
+        last_error = str(exc)
+
+    if os.name == "nt" and shutil.which("powershell"):
+        script = (
+            "$ProgressPreference='SilentlyContinue'; "
+            "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; "
+            "Invoke-WebRequest -UseBasicParsing -Uri $args[0] -OutFile $args[1]"
+        )
+        try:
+            code, output = run_capture(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script, url, str(destination)],
+                timeout=timeout,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError(f"не удалось скачать файл: {last_error}; PowerShell: {exc}") from exc
+        if code == 0 and destination.exists():
+            return
+        raise RuntimeError(f"не удалось скачать файл: {last_error}; PowerShell: {output or f'код {code}'}")
+
+    raise RuntimeError(f"не удалось скачать файл: {last_error}")
+
+
 def ngrok_config_ok(ngrok_path: str) -> tuple[bool, str]:
     try:
         code, output = run_capture([ngrok_path, "config", "check"], timeout=12)
@@ -248,6 +319,7 @@ def iter_common_ngrok_candidates() -> list[Path]:
     program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
     user_profile = os.environ.get("USERPROFILE", "")
     candidates = [
+        LOCAL_NGROK_EXE,
         Path(local_appdata) / "Microsoft" / "WinGet" / "Links" / "ngrok.exe",
         Path(local_appdata) / "ngrok" / "ngrok.exe",
         Path(program_files) / "ngrok" / "ngrok.exe",
@@ -287,6 +359,44 @@ def find_ngrok_path(preferred_path: str = "") -> str | None:
         if is_ngrok_exe(candidate):
             return str(candidate)
     return None
+
+
+def install_ngrok_direct() -> tuple[bool, str]:
+    if os.name != "nt":
+        return False, "прямая установка ngrok рассчитана на Windows"
+    archive_path = TOOLS_DIR / "downloads" / "ngrok-windows-amd64.zip"
+    try:
+        download_file(NGROK_DIRECT_ZIP_URL, archive_path, timeout=240)
+        LOCAL_NGROK_DIR.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(archive_path) as archive:
+            member = next((name for name in archive.namelist() if Path(name).name.lower() == "ngrok.exe"), "")
+            if not member:
+                return False, "в zip-архиве ngrok не найден ngrok.exe"
+            with archive.open(member) as src, LOCAL_NGROK_EXE.open("wb") as dst:
+                shutil.copyfileobj(src, dst)
+        code, output = run_capture([str(LOCAL_NGROK_EXE), "version"], timeout=20)
+        if code != 0:
+            return False, output or f"ngrok version завершился с кодом {code}"
+        return True, f"ngrok скачан и готов: {LOCAL_NGROK_EXE}"
+    except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+        return False, str(exc)
+
+
+def install_ngrok_automatically() -> tuple[bool, str]:
+    details: list[str] = []
+    ok, detail = install_ngrok_with_winget()
+    details.append(f"winget: {detail}")
+    if ok:
+        ngrok_path = find_ngrok_path()
+        if ngrok_path:
+            return True, f"ngrok найден после winget: {ngrok_path}"
+        details.append("winget завершился, но ngrok.exe пока не найден")
+
+    ok, detail = install_ngrok_direct()
+    details.append(f"direct zip: {detail}")
+    if ok:
+        return True, detail
+    return False, "\n".join(details)
 
 
 def install_ngrok_with_winget() -> tuple[bool, str]:
@@ -783,14 +893,14 @@ class InstallerApp:
 
     def _install_ngrok_auto_worker(self) -> None:
         try:
-            self.set_step("ngrok", "running", "Ставлю через winget")
+            self.set_step("ngrok", "running", "Ставлю автоматически")
             self.set_status("Пробую поставить ngrok автоматически")
-            ok, detail = install_ngrok_with_winget()
+            ok, detail = install_ngrok_automatically()
             if not ok:
                 self.set_step("ngrok", "action", "Нужна ручная установка")
                 self.set_status("Автоустановка ngrok не сработала")
                 self.write_log(
-                    "Автоустановка ngrok не завершилась.\n"
+                    "Автоустановка ngrok не завершилась ни через winget, ни прямым скачиванием zip.\n"
                     f"Что произошло: {detail[:1200]}\n"
                     "Запасной путь: нажми «Открыть ngrok download», распакуй ngrok.exe и укажи его через «Выбрать ngrok.exe».\n"
                 )
@@ -801,7 +911,7 @@ class InstallerApp:
                 self.set_step("ngrok", "action", "Путь ещё не найден")
                 self.set_status("ngrok установлен, но Windows пока не отдаёт путь")
                 self.write_log(
-                    "winget завершился успешно, но мастер пока не видит ngrok.exe.\n"
+                    "Автоустановка завершилась успешно, но мастер пока не видит ngrok.exe.\n"
                     "Попробуй закрыть и открыть мастер заново или укажи файл через «Выбрать ngrok.exe».\n"
                 )
                 return
@@ -937,8 +1047,8 @@ class InstallerApp:
         self.set_status("Проверяю ngrok")
         ngrok_path = find_ngrok_path(self.ngrok_path_var.get())
         if ngrok_path is None:
-            self.write_log("Не нашёл ngrok. Пробую поставить автоматически через winget...\n")
-            ok, detail = install_ngrok_with_winget()
+            self.write_log("Не нашёл ngrok. Пробую поставить автоматически: сначала winget, потом прямой zip от ngrok.\n")
+            ok, detail = install_ngrok_automatically()
             if ok:
                 ngrok_path = find_ngrok_path(self.ngrok_path_var.get())
                 if ngrok_path is not None:
@@ -948,11 +1058,11 @@ class InstallerApp:
                     self.write_log(f"ngrok найден после автоустановки: {ngrok_path}\n")
                     return ngrok_path
                 self.write_log(
-                    "winget завершился успешно, но мастер пока не видит ngrok.exe.\n"
+                    "Автоустановка завершилась успешно, но мастер пока не видит ngrok.exe.\n"
                     "Обычно помогает закрыть и открыть мастер заново. Если нет — укажи файл через «Выбрать ngrok.exe».\n"
                 )
             else:
-                self.write_log(f"Автоустановка через winget не сработала: {detail[:1200]}\n")
+                self.write_log(f"Автоустановка ngrok не сработала: {detail[:1200]}\n")
             self.set_step("ngrok", "action", "Поставь или выбери ngrok.exe")
             self.set_status("Жду ngrok")
             self.write_log(

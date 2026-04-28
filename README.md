@@ -147,7 +147,7 @@ If you want the simplest beginner-friendly route, start here.
 
 1. Double-click `Установить Secondary LANE.bat`
 2. If Python is missing, install Python 3.13 and come back
-3. If ngrok is missing, the installer first tries automatic `winget` install; if Windows still cannot find it, choose `ngrok.exe` in the installer
+3. If ngrok is missing, the installer tries `winget`, then a direct official ngrok zip download; if Windows still cannot find it, choose `ngrok.exe` in the installer
 4. Paste your ngrok authtoken and reserved domain into the installer
 5. Let it prepare or repair `.env` and `.venv`
 6. Let it open the panel for you, or click `Запустить панель` if Windows asks you to confirm the launch

@@ -69,6 +69,7 @@ OPENAPI_FILES = [
 IS_WINDOWS = os.name == "nt"
 VENV_DIR = PROJECT_DIR / ".venv"
 VENV_UVICORN = VENV_DIR / ("Scripts/uvicorn.exe" if IS_WINDOWS else "bin/uvicorn")
+LOCAL_NGROK_EXE = PROJECT_DIR / "tools" / "ngrok" / "ngrok.exe"
 LOCAL_URL = "http://127.0.0.1:8787"
 # Default is just the project folder itself — do not add C:\Projects or
 # D:\Workspace which do not exist on most machines and confused users
@@ -487,6 +488,7 @@ class ControlPanel:
             _pf  = os.environ.get("ProgramFiles", r"C:\Program Files")
             _up  = os.environ.get("USERPROFILE", "")
             candidates = [
+                LOCAL_NGROK_EXE,
                 Path(_lad) / "Microsoft" / "WinGet" / "Links" / "ngrok.exe",
                 Path(_lad) / "ngrok" / "ngrok.exe",
                 Path(_pf)  / "ngrok" / "ngrok.exe",

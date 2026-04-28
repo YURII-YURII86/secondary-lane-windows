@@ -21,6 +21,8 @@ REM ---------------------------------------------------------------
 
 set "SCRIPT=%~dp0gpts_agent_control.py"
 set "PANEL_LOG=%TEMP%\secondary-lane-panel-startup.log"
+set "PYTHON_INSTALLER_URL=https://www.python.org/ftp/python/3.13.13/python-3.13.13-amd64.exe"
+set "PYTHON_INSTALLER_EXE=%TEMP%\secondary-lane-python-3.13.13-amd64.exe"
 set "PF86=%ProgramFiles(x86)%"
 set "PY313_LOCAL=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
 set "PY313_PF=%ProgramFiles%\Python313\python.exe"
@@ -128,14 +130,31 @@ echo   Secondary LANE requires Python 3.13 for Windows.
 echo =========================================================
 echo.
 echo What to do:
-echo 1. Open:  https://www.python.org/downloads/windows/
-echo 2. Download Python 3.13 for Windows (64-bit installer).
-echo 3. IMPORTANT: check "Add python.exe to PATH" during install.
-echo 4. Reboot.
-echo 5. Double-click this .bat again.
+echo 1. I will try to download the official Python 3.13 installer.
+echo 2. If Windows asks for permission, approve the Python installer.
+echo 3. After Python finishes, double-click this .bat again if it does not continue.
 echo.
 echo To verify the install, open a new cmd window and run:
 echo   py -3.13 --version
 echo.
+call :downloadpythoninstaller
+if exist "!PYTHON_INSTALLER_EXE!" (
+    echo Starting Python installer. Please wait until it finishes...
+    start /wait "" "!PYTHON_INSTALLER_EXE!" /passive InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_pip=1 Include_tcltk=1 Include_test=0
+    goto :runinstaller
+)
+echo Automatic download did not finish. Opening the Python page as a fallback.
+start "" "https://www.python.org/downloads/latest/python3.13/"
 pause
+goto :eof
+
+:downloadpythoninstaller
+if exist "!PYTHON_INSTALLER_EXE!" goto :eof
+echo Downloading official Python 3.13 installer from python.org...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%PYTHON_INSTALLER_URL%' -OutFile '%PYTHON_INSTALLER_EXE%'" >nul 2>nul
+if exist "!PYTHON_INSTALLER_EXE!" goto :eof
+where curl >nul 2>nul
+if not errorlevel 1 (
+    curl -fL --connect-timeout 15 --max-time 600 -o "!PYTHON_INSTALLER_EXE!" "!PYTHON_INSTALLER_URL!" >nul 2>nul
+)
 goto :eof

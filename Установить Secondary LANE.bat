@@ -5,6 +5,8 @@ cd /d "%~dp0"
 
 set "SCRIPT=%~dp0second_lane_installer.py"
 set "INSTALLER_LOG=%TEMP%\secondary-lane-installer-startup.log"
+set "PYTHON_INSTALLER_URL=https://www.python.org/ftp/python/3.13.13/python-3.13.13-amd64.exe"
+set "PYTHON_INSTALLER_EXE=%TEMP%\secondary-lane-python-3.13.13-amd64.exe"
 set "PF86=%ProgramFiles(x86)%"
 set "PY313_LOCAL=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
 set "PY313_PF=%ProgramFiles%\Python313\python.exe"
@@ -57,13 +59,20 @@ echo   This installer needs Python 3.13 to show the setup window.
 echo =========================================================
 echo.
 echo What to do:
-echo 1. Browser will open the Python 3.13 download page.
-echo 2. Install Python 3.13 for Windows.
-echo 3. IMPORTANT: check "Add python.exe to PATH".
-echo 4. After the install finishes, come back to this window.
-echo 5. Press Enter here and I will try again automatically.
+echo 1. I will try to download the official Python 3.13 installer.
+echo 2. If Windows asks for permission, approve the Python installer.
+echo 3. After Python finishes, I will re-check automatically.
 echo.
-start "" "https://www.python.org/downloads/windows/"
+call :downloadpythoninstaller
+if exist "!PYTHON_INSTALLER_EXE!" (
+    echo.
+    echo Starting Python installer. Please wait until it finishes...
+    start /wait "" "!PYTHON_INSTALLER_EXE!" /passive InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_pip=1 Include_tcltk=1 Include_test=0
+    goto :resolvepython
+)
+echo.
+echo Automatic download did not finish. Opening the Python page as a fallback.
+start "" "https://www.python.org/downloads/latest/python3.13/"
 :retryafterpython
 set /p _retry="Press Enter to re-check Python, or type Q to quit: "
 if /I "!_retry!"=="Q" goto :eof
@@ -76,11 +85,18 @@ echo   Python was found, but its GUI components are not ready.
 echo =========================================================
 echo.
 echo What to do:
-echo 1. Reinstall Python 3.13 from python.org.
-echo 2. Use the full Windows installer, not a minimal or embedded build.
-echo 3. Then come back here and press Enter to try again.
+echo 1. I will try to repair this with the full official Python 3.13 installer.
+echo 2. If Windows asks for permission, approve the Python installer.
+echo 3. Then I will re-check automatically.
 echo.
-start "" "https://www.python.org/downloads/windows/"
+call :downloadpythoninstaller
+if exist "!PYTHON_INSTALLER_EXE!" (
+    echo Starting Python installer. Please wait until it finishes...
+    start /wait "" "!PYTHON_INSTALLER_EXE!" /passive InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_pip=1 Include_tcltk=1 Include_test=0
+    goto :resolvepython
+)
+echo Automatic download did not finish. Opening the Python page as a fallback.
+start "" "https://www.python.org/downloads/latest/python3.13/"
 set /p _retrytk="Press Enter to re-check Python GUI, or type Q to quit: "
 if /I "!_retrytk!"=="Q" goto :eof
 goto :resolvepython
@@ -106,3 +122,15 @@ echo 2. Make sure "Add python.exe to PATH" is enabled.
 echo 3. Run this installer again.
 echo.
 pause
+goto :eof
+
+:downloadpythoninstaller
+if exist "!PYTHON_INSTALLER_EXE!" goto :eof
+echo Downloading official Python 3.13 installer from python.org...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%PYTHON_INSTALLER_URL%' -OutFile '%PYTHON_INSTALLER_EXE%'" >nul 2>nul
+if exist "!PYTHON_INSTALLER_EXE!" goto :eof
+where curl >nul 2>nul
+if not errorlevel 1 (
+    curl -fL --connect-timeout 15 --max-time 600 -o "!PYTHON_INSTALLER_EXE!" "!PYTHON_INSTALLER_URL!" >nul 2>nul
+)
+goto :eof

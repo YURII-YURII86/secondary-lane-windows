@@ -10,7 +10,9 @@ cd /d "%~dp0"
 
 if not exist "%~dp0.env" goto :runinstaller
 findstr /B /C:"AGENT_TOKEN=replace-this-with-a-long-random-secret-token" "%~dp0.env" >nul 2>nul && goto :runinstaller
+findstr /B /C:"NGROK_DOMAIN=your-domain.ngrok-free.app" "%~dp0.env" >nul 2>nul && goto :runinstaller
 findstr /B /C:"NGROK_DOMAIN=your-domain.ngrok-free.dev" "%~dp0.env" >nul 2>nul && goto :runinstaller
+findstr /B /C:"NGROK_DOMAIN=your-domain.ngrok.app" "%~dp0.env" >nul 2>nul && goto :runinstaller
 if not exist "%~dp0.venv\Scripts\uvicorn.exe" goto :runinstaller
 
 REM ---------------------------------------------------------------
@@ -149,6 +151,9 @@ pause
 goto :eof
 
 :downloadpythoninstaller
+if exist "!PYTHON_INSTALLER_EXE!" (
+    for %%A in ("!PYTHON_INSTALLER_EXE!") do if %%~zA LSS 10000000 del /q "!PYTHON_INSTALLER_EXE!" >nul 2>nul
+)
 if exist "!PYTHON_INSTALLER_EXE!" goto :eof
 echo Downloading official Python 3.13 installer from python.org...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%PYTHON_INSTALLER_URL%' -OutFile '%PYTHON_INSTALLER_EXE%'" >nul 2>nul

@@ -138,7 +138,7 @@ If you prefer another route, here are the options.
 Before you start, you still need **three things** available at some point:
 
 1. **Python 3.13** for Windows — [python.org/downloads/windows](https://www.python.org/downloads/windows/) (tick "Add python.exe to PATH")
-2. **ngrok** account + a reserved free domain — [dashboard.ngrok.com](https://dashboard.ngrok.com) (free tier is enough)
+2. **ngrok** account + your free Dev Domain / Domain — [dashboard.ngrok.com](https://dashboard.ngrok.com) (free tier is enough)
 3. **ChatGPT Plus** (or any plan that supports Custom GPTs with Actions)
 
 Then pick one of two paths.
@@ -150,7 +150,7 @@ If you want the simplest beginner-friendly route, start here.
 1. Double-click `Установить Secondary LANE.bat`
 2. If Python is missing, the installer downloads the official Python 3.13 Windows installer and opens it for you
 3. If ngrok is missing, the installer tries `winget`, then a direct official ngrok zip download; if Windows still cannot find it, choose `ngrok.exe` in the installer
-4. Paste your ngrok authtoken and reserved domain only when the installer asks for them
+4. Paste your ngrok authtoken and ngrok Dev Domain / Domain only when the installer asks for them
 5. Let it prepare or repair `.env` and `.venv`
 6. Let it open the panel for you, or click `Запустить панель` if Windows asks you to confirm the launch
 
@@ -171,7 +171,7 @@ Short version if you are comfortable with a terminal:
 Copy-Item .env.example .env
 notepad .env
 # In .env set AGENT_TOKEN (a long random secret) and NGROK_DOMAIN
-# (your reserved domain from dashboard.ngrok.com, without "https://")
+# (your ngrok Dev Domain / Domain from dashboard.ngrok.com, without "https://")
 
 # 2. Install dependencies
 py -3.13 -m venv .venv
@@ -239,7 +239,7 @@ openapi.gpts.yaml        # API schema for GPT Actions
 ## Requirements
 
 - **Python 3.13** for Windows. The installer and repair checks intentionally standardize on 3.13 so beginners do not fall into version mismatch problems.
-- **`ngrok`** with a free account — create an **authtoken** and a **reserved domain** at [dashboard.ngrok.com](https://dashboard.ngrok.com) before first launch
+- **`ngrok`** with a free account — create/copy an **authtoken** and copy your **Dev Domain / Domain** at [dashboard.ngrok.com](https://dashboard.ngrok.com) before first launch
 - **ChatGPT Plus** or any plan that supports Custom GPTs with Actions
 
 ## License

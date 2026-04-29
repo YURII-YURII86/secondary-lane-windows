@@ -49,8 +49,8 @@ LOCAL_NGROK_EXE = LOCAL_NGROK_DIR / "ngrok.exe"
 PYTHON_DOWNLOAD_URL = "https://www.python.org/downloads/windows/"
 NGROK_DOWNLOAD_URL = "https://ngrok.com/download"
 NGROK_DIRECT_ZIP_URL = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip"
-NGROK_AUTHTOKEN_URL = "https://dashboard.ngrok.com/get-started/your-authtoken"
-NGROK_DOMAINS_URL = "https://dashboard.ngrok.com/cloud-edge/domains"
+NGROK_AUTHTOKEN_URL = "https://dashboard.ngrok.com/tunnels/authtokens"
+NGROK_DOMAINS_URL = "https://dashboard.ngrok.com/domains"
 WINDOWS_GUIDE_URL = PROJECT_DIR / "docs" / "WINDOWS_FIRST_START.md"
 WINGET_NGROK_COMMAND = [
     "winget",
@@ -68,8 +68,15 @@ INTERNET_CHECK_URLS = (
     "https://chatgpt.com",
 )
 
-NGROK_DOMAIN_REGEX = re.compile(r"^[A-Za-z0-9-]+\.(?:ngrok-free\.dev|ngrok\.app)$")
+NGROK_DOMAIN_REGEX = re.compile(
+    r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$"
+)
 NGROK_AUTHTOKEN_LINE_RE = re.compile(r"^\s*authtoken\s*:\s*(?P<value>.+?)\s*$", re.IGNORECASE)
+PLACEHOLDER_NGROK_DOMAINS = {
+    "your-domain.ngrok-free.app",
+    "your-domain.ngrok-free.dev",
+    "your-domain.ngrok.app",
+}
 PLACEHOLDER_WORKSPACE_ROOTS = {
     r"c:\secondlane",
     "c:/secondlane",
@@ -150,7 +157,7 @@ STEP_SPECS: list[StepSpec] = [
     StepSpec(
         "domain",
         "Адрес ngrok",
-        "Проверяю reserved domain ngrok. Это постоянный публичный адрес для подключения GPT.",
+        "Проверяю Dev Domain или Domain ngrok. Это постоянный публичный адрес для подключения GPT.",
         "Постоянный адрес нужен, чтобы после перезапуска Windows не приходилось каждый раз заново менять настройки GPT.",
     ),
     StepSpec(
@@ -243,6 +250,17 @@ def normalize_ngrok_domain(raw: str) -> str:
     return cleaned.strip().strip("/").lower()
 
 
+def is_placeholder_ngrok_domain(raw: str) -> bool:
+    return normalize_ngrok_domain(raw) in PLACEHOLDER_NGROK_DOMAINS
+
+
+def ngrok_domain_is_valid(raw: str) -> bool:
+    domain = normalize_ngrok_domain(raw)
+    if not domain or is_placeholder_ngrok_domain(domain):
+        return False
+    return bool(NGROK_DOMAIN_REGEX.fullmatch(domain))
+
+
 def parse_env_text(text: str) -> dict[str, str]:
     result: dict[str, str] = {}
     for line in text.splitlines():
@@ -304,6 +322,13 @@ def merge_workspace_roots(primary_root: str, existing_value: str) -> str:
 def is_placeholder_workspace_root(raw: str) -> bool:
     first = normalize_workspace_root(raw.split(";", 1)[0]).rstrip("\\/").lower()
     return first in PLACEHOLDER_WORKSPACE_ROOTS
+
+
+def workspace_placeholder_should_be_ignored(raw: str) -> bool:
+    first = normalize_workspace_root(raw.split(";", 1)[0])
+    if not is_placeholder_workspace_root(first):
+        return False
+    return not Path(first).exists()
 
 
 def run_capture(command: list[str], timeout: int = 20) -> tuple[int, str]:
@@ -628,10 +653,12 @@ def assess_install_health() -> InstallHealth:
         if not token_is_safe(token):
             issues.append("AGENT_TOKEN отсутствует или выглядит как заглушка")
         domain = normalize_ngrok_domain(env_values.get("NGROK_DOMAIN", ""))
-        if not domain or domain == "your-domain.ngrok-free.dev" or not NGROK_DOMAIN_REGEX.fullmatch(domain):
+        if not ngrok_domain_is_valid(domain):
             issues.append("NGROK_DOMAIN не заполнен или выглядит неверно")
         workspace_root = normalize_workspace_root(env_values.get("WORKSPACE_ROOTS", "").split(";", 1)[0])
-        if not workspace_root:
+        if workspace_placeholder_should_be_ignored(workspace_root):
+            issues.append("WORKSPACE_ROOTS всё ещё выглядит как шаблон C:\\SecondLane")
+        elif not workspace_root:
             issues.append("WORKSPACE_ROOTS не заполнен")
         else:
             workspace_path = Path(workspace_root)
@@ -857,7 +884,7 @@ class InstallerApp:
         tk.Label(self.ngrok_domain_row, text="Адрес ngrok", font=("Segoe UI", 10, "bold"), bg=PALETTE["surface"], fg=PALETTE["text"]).pack(anchor="w")
         tk.Label(
             self.ngrok_domain_row,
-            text="Например: my-team.ngrok-free.dev. Вставляй без https:// и без лишних символов.",
+            text="Например: my-team.ngrok-free.app или my-team.ngrok-free.dev. Вставляй без https:// и без лишних символов.",
             font=("Segoe UI", 9),
             bg=PALETTE["surface"],
             fg=PALETTE["muted"],
@@ -1114,8 +1141,8 @@ class InstallerApp:
                 self.secondary_button_text.set("Открыть authtoken")
             elif spec.key == "domain":
                 hint = (
-                    "Вставь reserved domain ngrok. Он выглядит примерно так: my-team.ngrok-free.dev. "
-                    "Если адреса ещё нет, открой страницу Domains и создай бесплатный статический адрес."
+                    "Вставь Dev Domain или Domain ngrok. Он выглядит примерно так: my-team.ngrok-free.app, "
+                    "my-team.ngrok-free.dev или my-team.ngrok.app. Если адреса ещё нет, открой страницу Domains."
                 )
                 show_domain = True
                 self.primary_button_text.set("Сохранить адрес и продолжить")
@@ -1175,7 +1202,7 @@ class InstallerApp:
     def paste_ngrok_domain(self) -> None:
         text = normalize_ngrok_domain(self._clipboard_text())
         if not text:
-            self.write_log("В буфере обмена не вижу адрес ngrok. Сначала скопируй reserved domain в кабинете ngrok.\n")
+            self.write_log("В буфере обмена не вижу адрес ngrok. Сначала скопируй Dev Domain или Domain в кабинете ngrok.\n")
             return
         self.ngrok_domain_var.set(text)
         self.ngrok_domain_entry.focus_set()
@@ -1292,10 +1319,10 @@ class InstallerApp:
                 pass
         env_domain = normalize_ngrok_domain(env_values.get("NGROK_DOMAIN", ""))
         env_workspace = env_values.get("WORKSPACE_ROOTS", "").split(";", 1)[0].strip()
-        if not ENV_FILE.exists() and is_placeholder_workspace_root(env_workspace):
+        if workspace_placeholder_should_be_ignored(env_workspace):
             env_workspace = ""
         env_ngrok_path = normalize_exe_path(env_values.get("NGROK_PATH", ""))
-        self.ngrok_domain_var.set(env_domain if env_domain and env_domain != "your-domain.ngrok-free.dev" else saved_domain)
+        self.ngrok_domain_var.set(env_domain if env_domain and not is_placeholder_ngrok_domain(env_domain) else saved_domain)
         self.ngrok_path_var.set(env_ngrok_path or saved_ngrok_path)
         self.workspace_root_var.set(env_workspace or saved_workspace)
         token = env_values.get("AGENT_TOKEN", "")
@@ -1671,7 +1698,7 @@ class InstallerApp:
             self.write_log(
                 "Нужен ключ ngrok.\n"
                 "Что сделать сейчас:\n"
-                "1. Нажми «Открыть authtoken page».\n"
+                "1. Нажми «Открыть authtoken».\n"
                 "2. Скопируй authtoken из кабинета ngrok.\n"
                 "3. Вставь его в поле ключа, которое показал мастер.\n"
                 "4. Снова нажми главную кнопку.\n"
@@ -1713,24 +1740,24 @@ class InstallerApp:
         self.set_step("domain", "running", "Проверяю")
         self.set_status("Проверяю домен ngrok")
         domain = normalize_ngrok_domain(self.ngrok_domain_var.get())
-        if not domain or domain == "your-domain.ngrok-free.dev":
-            self.set_step("domain", "action", "Вставь reserved domain")
+        if not domain or is_placeholder_ngrok_domain(domain):
+            self.set_step("domain", "action", "Вставь адрес ngrok")
             self.set_status("Жду домен ngrok")
             self.write_log(
-                "Пока не вижу реальный reserved domain ngrok.\n"
+                "Пока не вижу реальный Dev Domain или Domain ngrok.\n"
                 "Что сделать сейчас:\n"
-                "1. Нажми «Открыть domains page».\n"
-                "2. Создай бесплатный reserved domain.\n"
+                "1. Нажми «Открыть domains».\n"
+                "2. Скопируй свой бесплатный Dev Domain или созданный Domain.\n"
                 "3. Вставь его в поле адреса, которое показал мастер, без https://.\n"
                 "4. Снова нажми главную кнопку.\n"
             )
             return None
-        if not NGROK_DOMAIN_REGEX.fullmatch(domain):
+        if not ngrok_domain_is_valid(domain):
             self.set_step("domain", "action", "Формат домена странный")
             self.set_status("Проверь домен ngrok")
             self.write_log(
                 "Домен выглядит необычно.\n"
-                "Ожидаю что-то вроде example-name.ngrok-free.dev или team-name.ngrok.app.\n"
+                "Ожидаю что-то вроде example-name.ngrok-free.app, example-name.ngrok-free.dev или team-name.ngrok.app.\n"
             )
             return None
         self.ngrok_domain_var.set(domain)

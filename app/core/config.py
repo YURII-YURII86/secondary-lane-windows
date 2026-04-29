@@ -53,7 +53,7 @@ def _load_env_file() -> dict[str, str]:
     values: dict[str, str] = {}
     if not ENV_FILE.exists():
         return values
-    for line in ENV_FILE.read_text("utf-8").splitlines():
+    for line in ENV_FILE.read_text("utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -105,7 +105,7 @@ def load_settings() -> Settings:
         state_db = PROJECT_DIR / "data" / "agent.db"
 
     raw_roots = env.get("WORKSPACE_ROOTS", "")
-    workspace_roots = [Path(item).expanduser().resolve() for item in raw_roots.split(os.pathsep) if item.strip()]
+    workspace_roots = [Path(item.strip()).expanduser().resolve() for item in raw_roots.split(os.pathsep) if item.strip()]
     if not workspace_roots:
         workspace_roots = [PROJECT_DIR]
 

@@ -125,6 +125,9 @@ pause
 goto :eof
 
 :downloadpythoninstaller
+if exist "!PYTHON_INSTALLER_EXE!" (
+    for %%A in ("!PYTHON_INSTALLER_EXE!") do if %%~zA LSS 10000000 del /q "!PYTHON_INSTALLER_EXE!" >nul 2>nul
+)
 if exist "!PYTHON_INSTALLER_EXE!" goto :eof
 echo Downloading official Python 3.13 installer from python.org...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%PYTHON_INSTALLER_URL%' -OutFile '%PYTHON_INSTALLER_EXE%'" >nul 2>nul

@@ -77,7 +77,12 @@ LOCAL_URL = "http://127.0.0.1:8787"
 DEFAULT_WORKSPACE_ROOTS = str(PROJECT_DIR)
 
 # --- Tunnel defaults ---
-DEFAULT_NGROK_DOMAIN = "your-domain.ngrok-free.dev"
+DEFAULT_NGROK_DOMAIN = "your-domain.ngrok-free.app"
+PLACEHOLDER_NGROK_DOMAINS = {
+    "your-domain.ngrok-free.app",
+    "your-domain.ngrok-free.dev",
+    "your-domain.ngrok.app",
+}
 TUNNEL_HEALTH_ATTEMPTS = 4
 TUNNEL_HEALTH_DELAY_SEC = 2.0
 TUNNEL_HEALTH_TIMEOUT_SEC = 6
@@ -87,6 +92,12 @@ NGROK_BLOCKED_IP_ERROR = "ERR_NGROK_9040"
 PUBLIC_CHECK_INTERVAL_SEC = 25
 PUBLIC_CHECK_MAX_FAILURES = 2
 RECOVERY_BACKOFF_STEPS_SEC = [3, 10, 30]
+
+
+def normalize_ngrok_domain(raw: str) -> str:
+    cleaned = raw.strip()
+    cleaned = re.sub(r"^https?://", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip().strip("/").lower()
 
 
 @dataclass
@@ -412,7 +423,10 @@ class ControlPanel:
         )
 
     def ngrok_domain(self) -> str:
-        return self.load_env().get("NGROK_DOMAIN", DEFAULT_NGROK_DOMAIN)
+        return normalize_ngrok_domain(self.load_env().get("NGROK_DOMAIN", DEFAULT_NGROK_DOMAIN))
+
+    def ngrok_domain_is_placeholder(self, domain: str) -> bool:
+        return normalize_ngrok_domain(domain) in PLACEHOLDER_NGROK_DOMAINS
 
     def _classify_ngrok_output(self, text: str) -> TunnelFailure:
         lowered = text.lower()
@@ -537,8 +551,8 @@ class ControlPanel:
             )
             return False, install_hint
         domain = self.ngrok_domain().strip()
-        if not domain:
-            return False, "в .env не задан NGROK_DOMAIN"
+        if not domain or self.ngrok_domain_is_placeholder(domain):
+            return False, "в .env не задан реальный NGROK_DOMAIN"
         try:
             result = subprocess.run(
                 [ngrok_path, "config", "check"],

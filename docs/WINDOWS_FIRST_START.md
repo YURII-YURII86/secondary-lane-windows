@@ -13,7 +13,7 @@ Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yuri
 2. Дважды нажми `Установить Secondary LANE.bat`.
 3. Если Python ещё не установлен, установщик сам скачает официальный Python 3.13 installer, откроет его и потом попробует снова.
 4. Если `ngrok` не найден, мастер попробует `winget`, потом прямое скачивание официального zip ngrok; если не получится, он даст скачать `ngrok` и выбрать файл `ngrok.exe`.
-5. Вставь `authtoken` и `reserved domain` из кабинета `ngrok`, когда мастер сам покажет соответствующий шаг.
+5. Вставь `authtoken` и адрес `Dev Domain / Domain` из кабинета `ngrok`, когда мастер сам покажет соответствующий шаг.
 6. Дай мастеру закончить подготовку или repair `.env` и `.venv`.
 7. Дай мастеру самому открыть панель или, если Windows попросит подтверждение, нажми в мастере `Запустить панель`.
 8. Дождись строки `Туннель активен`.
@@ -42,8 +42,8 @@ Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yuri
 1. **Скачай и установи Python 3.13**: [python.org/downloads/windows](https://www.python.org/downloads/windows/). При установке **обязательно поставь галку «Add python.exe to PATH»**. Перезагрузи компьютер.
 2. **Подготовь ngrok**: проще всего дать мастеру поставить его автоматически. Если автоматическая установка не сработала, скачай `ngrok` на [ngrok.com/download](https://ngrok.com/download), распакуй `ngrok.exe` и укажи его в мастере.
 3. **Зарегистрируйся на ngrok**: [dashboard.ngrok.com/signup](https://dashboard.ngrok.com/signup). Подтверди почту.
-4. **Скопируй authtoken** из [dashboard.ngrok.com/get-started/your-authtoken](https://dashboard.ngrok.com/get-started/your-authtoken) и вставь его в мастер. Если делаешь всё вручную и команда `ngrok` работает в cmd, можно выполнить: `ngrok config add-authtoken ВСТАВЬ_ТОКЕН_СЮДА`.
-5. **Создай бесплатный reserved domain**: [dashboard.ngrok.com/domains](https://dashboard.ngrok.com/domains) → **+ New Domain**. Скопируй имя домена целиком (например `something-unique-1234.ngrok-free.dev`).
+4. **Скопируй authtoken** из [dashboard.ngrok.com/tunnels/authtokens](https://dashboard.ngrok.com/tunnels/authtokens) и вставь его в мастер. Если делаешь всё вручную и команда `ngrok` работает в cmd, можно выполнить: `ngrok config add-authtoken ВСТАВЬ_ТОКЕН_СЮДА`.
+5. **Скопируй адрес ngrok**: [dashboard.ngrok.com/domains](https://dashboard.ngrok.com/domains). На free-аккаунте это обычно уже выданный `Dev Domain`, например `something-unique.ngrok-free.app` или `something-unique.ngrok-free.dev`.
 
 **Настройка проекта (один раз):**
 
@@ -56,7 +56,7 @@ Telegram: https://t.me/yurii_yurii86 · YouTube: https://youtube.com/@yurii_yuri
 
 **Запуск:**
 
-9. **Двойной клик по `Запустить GPTS Agent.bat`** в корне проекта. Откроется панель управления. Дождись, пока в ней появится статус «tunnel is up» и публичный URL вида `https://...ngrok-free.dev`.
+9. **Двойной клик по `Запустить GPTS Agent.bat`** в корне проекта. Откроется панель управления. Дождись, пока в ней появится статус «tunnel is up» и публичный URL вида `https://...ngrok-free.app` или `https://...ngrok-free.dev`.
 10. **Проверь `openapi.gpts.yaml`**: открой этот файл в блокноте в корне проекта. В секции `servers:` должен быть твой реальный публичный URL, а не шаблон. Если остался шаблон — перезапусти `.bat`.
 
 **Подключение GPT:**
@@ -595,7 +595,7 @@ ngrok version
 
 Открой:
 
-- [Your ngrok authtoken](https://dashboard.ngrok.com/get-started/your-authtoken)
+- [Your ngrok authtoken](https://dashboard.ngrok.com/tunnels/authtokens)
 
 Сделай так:
 
@@ -688,15 +688,15 @@ ngrok config add-authtoken 1234567890abcdefghijklmnopqrstuvwxyz
 
 Важно:
 
-- в этой инструкции предполагается, что ты создаёшь домен сам в своём аккаунте `ngrok`;
+- в этой инструкции предполагается, что ты берёшь домен из своего аккаунта `ngrok`;
 - не нужно ждать, что кто-то даст тебе готовый домен;
 - не нужно брать домен "из головы";
-- используй только домен, который ты сам создал и который видишь в своём кабинете `ngrok`.
+- используй только домен, который ты видишь в своём кабинете `ngrok`.
 
 Пример домена:
 
 ```text
-my-agent.ngrok-free.dev
+my-agent.ngrok-free.app
 ```
 
 или:
@@ -749,7 +749,7 @@ demo-team.ngrok.app/
 
 ### Зачем это вообще
 
-Этот проект ожидает, что в `.env` будет реальный `NGROK_DOMAIN` — то есть настоящий домен, который ты создал в своём аккаунте `ngrok`.
+Этот проект ожидает, что в `.env` будет реальный `NGROK_DOMAIN` — то есть настоящий Dev Domain или Domain из твоего аккаунта `ngrok`.
 Без него панель не сможет корректно поднять туннель.
 
 ---
@@ -1118,7 +1118,7 @@ servers:
 
 ```yaml
 servers:
-  - url: https://your-domain.ngrok-free.dev
+  - url: https://your-domain.ngrok-free.app
 ```
 
 ### Если не получилось
@@ -1898,7 +1898,7 @@ The shortest English path is:
 2. install Python 3.13 from [python.org](https://www.python.org/downloads/windows/);
 3. install `ngrok` from [ngrok.com](https://ngrok.com/download/windows);
 4. add your `ngrok` authtoken;
-5. create an `ngrok` domain in your dashboard;
+5. copy your `ngrok` Dev Domain / Domain from the dashboard;
 6. copy `.env.example` to `.env`;
 7. fill in `AGENT_TOKEN`, `NGROK_DOMAIN`, and `WORKSPACE_ROOTS`;
 8. run `Запустить GPTS Agent.bat`;

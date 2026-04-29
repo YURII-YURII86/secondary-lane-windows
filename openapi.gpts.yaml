@@ -10,7 +10,7 @@ info:
     name: Yurii Slepnev
     url: https://t.me/yurii_yurii86
 servers:
-  - url: https://your-domain.ngrok-free.dev
+  - url: https://your-domain.ngrok-free.app
 components:
   schemas:
     SessionRecord:

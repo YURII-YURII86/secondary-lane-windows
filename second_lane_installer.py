@@ -258,7 +258,9 @@ def set_env_value(text: str, key: str, value: str) -> str:
     line = f"{key}={value}"
     pattern = re.compile(rf"(?m)^{re.escape(key)}=.*$")
     if pattern.search(text):
-        return pattern.sub(line, text)
+        # Windows paths contain backslashes like C:\SecondLane.
+        # Regex replacement strings treat backslashes as escapes, so use a lambda.
+        return pattern.sub(lambda _match: line, text)
     suffix = "" if text.endswith("\n") else "\n"
     return f"{text}{suffix}{line}\n"
 

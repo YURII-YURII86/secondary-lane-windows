@@ -47,6 +47,13 @@ def test_ngrok_domain_validation_rejects_placeholders_and_bad_text() -> None:
     assert not installer.ngrok_domain_is_valid("https://")
 
 
+def test_installer_explains_ngrok_domain_startup_failure() -> None:
+    detail = installer.explain_ngrok_startup_failure("ERROR: the endpoint is already online")
+
+    assert detail is not None
+    assert "занят" in detail
+
+
 def test_installer_rejects_ngrok_v2(monkeypatch, tmp_path: Path) -> None:
     ngrok = tmp_path / "ngrok.exe"
     ngrok.write_text("fake", "utf-8")
@@ -54,6 +61,31 @@ def test_installer_rejects_ngrok_v2(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(installer, "run_capture", lambda command, timeout=20: (0, "ngrok version 2.3.41"))
 
     assert installer.usable_ngrok_path(ngrok) is None
+
+
+def test_installer_rejects_unparseable_ngrok_version(monkeypatch, tmp_path: Path) -> None:
+    ngrok = tmp_path / "ngrok.exe"
+    ngrok.write_text("fake", "utf-8")
+
+    monkeypatch.setattr(installer, "run_capture", lambda command, timeout=20: (0, "not really ngrok"))
+
+    assert installer.usable_ngrok_path(ngrok) is None
+
+
+def test_venv_health_rejects_wrong_python_version(monkeypatch, tmp_path: Path) -> None:
+    python = tmp_path / "python.exe"
+    uvicorn = tmp_path / "uvicorn.exe"
+    python.write_text("fake", "utf-8")
+    uvicorn.write_text("fake", "utf-8")
+
+    monkeypatch.setattr(installer, "VENV_PYTHON", python)
+    monkeypatch.setattr(installer, "VENV_UVICORN", uvicorn)
+    monkeypatch.setattr(installer, "run_capture", lambda command, timeout=20: (13, "python 3.12.9"))
+
+    ok, detail = installer.venv_health_check()
+
+    assert not ok
+    assert "Python 3.13" in detail
 
 
 def test_control_panel_normalizes_ngrok_domain_before_tunnel_start() -> None:
@@ -80,6 +112,10 @@ def test_control_panel_classifies_common_ngrok_startup_failures() -> None:
     missing_auth = panel._classify_ngrok_output("ERROR: authtoken is required")
     assert missing_auth.code == "auth_failed"
     assert not missing_auth.recoverable
+
+    unknown_startup_crash = panel._classify_ngrok_output("ERROR: something unexpected")
+    assert unknown_startup_crash.code == "startup_crashed"
+    assert not unknown_startup_crash.recoverable
 
 
 def test_control_panel_uses_domain_flag_for_older_ngrok_help(monkeypatch) -> None:

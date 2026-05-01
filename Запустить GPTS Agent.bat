@@ -25,6 +25,8 @@ set "SCRIPT=%~dp0gpts_agent_control.py"
 set "PANEL_LOG=%TEMP%\secondary-lane-panel-startup.log"
 set "PYTHON_INSTALLER_URL=https://www.python.org/ftp/python/3.13.13/python-3.13.13-amd64.exe"
 set "PYTHON_INSTALLER_EXE=%TEMP%\secondary-lane-python-3.13.13-amd64.exe"
+set "PYTHON_INSTALLER_PART=%PYTHON_INSTALLER_EXE%.partial"
+set "PYTHON_INSTALLER_MIN_BYTES=20000000"
 set "PF86=%ProgramFiles(x86)%"
 set "PY313_LOCAL=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
 set "PY313_PF=%ProgramFiles%\Python313\python.exe"
@@ -152,14 +154,23 @@ goto :eof
 
 :downloadpythoninstaller
 if exist "!PYTHON_INSTALLER_EXE!" (
-    for %%A in ("!PYTHON_INSTALLER_EXE!") do if %%~zA LSS 10000000 del /q "!PYTHON_INSTALLER_EXE!" >nul 2>nul
+    for %%A in ("!PYTHON_INSTALLER_EXE!") do if %%~zA LSS !PYTHON_INSTALLER_MIN_BYTES! del /q "!PYTHON_INSTALLER_EXE!" >nul 2>nul
 )
 if exist "!PYTHON_INSTALLER_EXE!" goto :eof
+if exist "!PYTHON_INSTALLER_PART!" del /q "!PYTHON_INSTALLER_PART!" >nul 2>nul
 echo Downloading official Python 3.13 installer from python.org...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%PYTHON_INSTALLER_URL%' -OutFile '%PYTHON_INSTALLER_EXE%'" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%PYTHON_INSTALLER_URL%' -OutFile '%PYTHON_INSTALLER_PART%'" >nul 2>nul
+if exist "!PYTHON_INSTALLER_PART!" (
+    for %%A in ("!PYTHON_INSTALLER_PART!") do if %%~zA GEQ !PYTHON_INSTALLER_MIN_BYTES! move /y "!PYTHON_INSTALLER_PART!" "!PYTHON_INSTALLER_EXE!" >nul 2>nul
+    if exist "!PYTHON_INSTALLER_PART!" del /q "!PYTHON_INSTALLER_PART!" >nul 2>nul
+)
 if exist "!PYTHON_INSTALLER_EXE!" goto :eof
 where curl >nul 2>nul
 if not errorlevel 1 (
-    curl -fL --connect-timeout 15 --max-time 600 -o "!PYTHON_INSTALLER_EXE!" "!PYTHON_INSTALLER_URL!" >nul 2>nul
+    curl -fL --connect-timeout 15 --max-time 600 -o "!PYTHON_INSTALLER_PART!" "!PYTHON_INSTALLER_URL!" >nul 2>nul
+    if exist "!PYTHON_INSTALLER_PART!" (
+        for %%A in ("!PYTHON_INSTALLER_PART!") do if %%~zA GEQ !PYTHON_INSTALLER_MIN_BYTES! move /y "!PYTHON_INSTALLER_PART!" "!PYTHON_INSTALLER_EXE!" >nul 2>nul
+        if exist "!PYTHON_INSTALLER_PART!" del /q "!PYTHON_INSTALLER_PART!" >nul 2>nul
+    )
 )
 goto :eof

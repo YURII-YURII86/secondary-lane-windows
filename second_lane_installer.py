@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.request
 import webbrowser
@@ -346,14 +347,18 @@ def run_capture(command: list[str], timeout: int = 20) -> tuple[int, str]:
 
 def download_file(url: str, destination: Path, timeout: int = 180) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_suffix(destination.suffix + ".partial")
+    partial.unlink(missing_ok=True)
     last_error = ""
     try:
         request = urllib.request.Request(url, headers={"User-Agent": "Second Lane Installer"})
-        with urllib.request.urlopen(request, timeout=timeout) as response, destination.open("wb") as handle:
+        with urllib.request.urlopen(request, timeout=timeout) as response, partial.open("wb") as handle:
             shutil.copyfileobj(response, handle)
+        partial.replace(destination)
         return
     except (OSError, TimeoutError, urllib.error.URLError) as exc:
         last_error = str(exc)
+        partial.unlink(missing_ok=True)
 
     if os.name == "nt" and shutil.which("powershell"):
         script = (
@@ -363,13 +368,16 @@ def download_file(url: str, destination: Path, timeout: int = 180) -> None:
         )
         try:
             code, output = run_capture(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script, url, str(destination)],
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script, url, str(partial)],
                 timeout=timeout,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
+            partial.unlink(missing_ok=True)
             raise RuntimeError(f"не удалось скачать файл: {last_error}; PowerShell: {exc}") from exc
-        if code == 0 and destination.exists():
+        if code == 0 and partial.exists():
+            partial.replace(destination)
             return
+        partial.unlink(missing_ok=True)
         raise RuntimeError(f"не удалось скачать файл: {last_error}; PowerShell: {output or f'код {code}'}")
 
     raise RuntimeError(f"не удалось скачать файл: {last_error}")
@@ -486,7 +494,104 @@ def ngrok_version_supported(path: str) -> tuple[bool, str]:
     match = re.search(r"ngrok\s+version\s+(\d+)", output, flags=re.IGNORECASE)
     if match and int(match.group(1)) < NGROK_MIN_MAJOR_VERSION:
         return False, f"нужен ngrok v3+, найдено: {output}"
+    if not match:
+        return False, f"не смог понять версию ngrok: {output or '(пустой вывод)'}"
     return True, output or "ngrok version OK"
+
+
+def ngrok_domain_arg(ngrok_path: str, domain: str) -> str:
+    try:
+        code, output = run_capture([ngrok_path, "http", "--help"], timeout=8)
+    except (OSError, subprocess.TimeoutExpired):
+        output = ""
+        code = 1
+    lowered = output.lower()
+    if code == 0 and "--url" in lowered:
+        return f"--url={domain}"
+    if code == 0 and "--domain" in lowered:
+        return f"--domain={domain}"
+    return f"--url={domain}"
+
+
+def explain_ngrok_startup_failure(text: str) -> str | None:
+    lowered = text.lower()
+    if "err_ngrok_9040" in lowered:
+        return "ngrok заблокировал текущий IP. Попробуй другую сеть/VPN/VPS вне заблокированного диапазона."
+    if "authentication failed" in lowered or "invalid authtoken" in lowered:
+        return "ngrok отклонил authtoken. Скопируй свежий ключ из кабинета ngrok и вставь его заново."
+    if "authtoken" in lowered and ("not configured" in lowered or "required" in lowered or "sign up" in lowered):
+        return "ngrok не видит сохранённый authtoken. Нужно пройти шаг ключа ngrok заново."
+    if "unknown flag" in lowered or "flag provided but not defined" in lowered or "unknown shorthand flag" in lowered:
+        return "найден старый или несовместимый ngrok.exe. Нужен ngrok v3+."
+    if "already online" in lowered or "already in use" in lowered or "is already bound" in lowered:
+        return "этот ngrok-домен уже занят другим запущенным туннелем. Закрой старый ngrok/Second Lane и попробуй снова."
+    if "reserved domain" in lowered or ("domain" in lowered and ("invalid" in lowered or "not found" in lowered)):
+        return "ngrok не принял домен. Проверь, что это именно Domain / Dev Domain из твоего кабинета ngrok."
+    if "failed to reconnect session" in lowered or "timeout" in lowered or "eof" in lowered:
+        return "ngrok не смог стабильно подключиться к своей сети. Попробуй другую сеть/VPN или повтори позже."
+    return None
+
+
+def verify_ngrok_domain_can_start(ngrok_path: str, domain: str, timeout: int = 12) -> tuple[bool, str]:
+    command = [
+        ngrok_path,
+        "http",
+        "8787",
+        ngrok_domain_arg(ngrok_path, domain),
+        "--log=stdout",
+        "--log-format=logfmt",
+    ]
+    try:
+        proc = subprocess.Popen(
+            command,
+            cwd=PROJECT_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except OSError as exc:
+        return False, f"не смог запустить ngrok для проверки домена: {exc}"
+
+    lines: list[str] = []
+    output_queue: queue.Queue[str] = queue.Queue()
+
+    def reader() -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            output_queue.put(line)
+
+    threading.Thread(target=reader, daemon=True).start()
+    deadline = time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            try:
+                line = output_queue.get(timeout=0.25)
+            except queue.Empty:
+                if proc.poll() is not None:
+                    break
+                continue
+            lines.append(line)
+            recent = "".join(lines[-25:])
+            if "started tunnel" in line or "url=https://" in line:
+                return True, "ngrok принял домен и смог начать туннель"
+            explained = explain_ngrok_startup_failure(recent)
+            if explained:
+                return False, explained
+
+        recent = "".join(lines[-25:]).strip()
+        explained = explain_ngrok_startup_failure(recent)
+        if explained:
+            return False, explained
+        if proc.poll() is not None:
+            return False, f"ngrok завершился до готовности домена. Последний вывод: {recent or '(пусто)'}"
+        return False, "ngrok не сообщил о готовности домена за отведённое время"
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
 
 def usable_ngrok_path(path: Path) -> str | None:
@@ -645,12 +750,21 @@ def venv_health_check() -> tuple[bool, str]:
             [
                 str(VENV_PYTHON),
                 "-c",
-                "import fastapi, pydantic, uvicorn; print('ok')",
+                (
+                    "import sys; "
+                    "print(f'python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'); "
+                    "sys.exit(13) if sys.version_info[:2] != (3, 13) else None; "
+                    "import fastapi, pydantic, uvicorn; "
+                    "print('ok')"
+                ),
             ],
             timeout=20,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, f"не смог проверить .venv: {exc}"
+    if code == 13:
+        detail = output or "версия Python внутри .venv не определена"
+        return False, f"нужен Python 3.13 внутри .venv, сейчас: {detail}"
     if code != 0 or "ok" not in output:
         detail = output or "импорт зависимостей не прошёл"
         return False, detail
@@ -1602,7 +1716,7 @@ class InstallerApp:
             if not self._step_auth(ngrok_path):
                 return
             step_key = "domain"
-            domain = self._step_domain()
+            domain = self._step_domain(ngrok_path)
             if domain is None:
                 return
             step_key = "env"
@@ -1766,7 +1880,7 @@ class InstallerApp:
         self.write_log("Authtoken сохранён в конфиг ngrok.\n")
         return True
 
-    def _step_domain(self) -> str | None:
+    def _step_domain(self, ngrok_path: str) -> str | None:
         self.set_step("domain", "running", "Проверяю")
         self.set_status("Проверяю домен ngrok")
         domain = normalize_ngrok_domain(self.ngrok_domain_var.get())
@@ -1790,9 +1904,20 @@ class InstallerApp:
                 "Ожидаю что-то вроде example-name.ngrok-free.app, example-name.ngrok-free.dev или team-name.ngrok.app.\n"
             )
             return None
+        self.write_log("Пробую коротко запустить ngrok с этим доменом, чтобы не узнать о проблеме уже в панели.\n")
+        ok, detail = verify_ngrok_domain_can_start(ngrok_path, domain)
+        if not ok:
+            self.set_step("domain", "action", "ngrok не принял домен")
+            self.set_status("Проверь домен ngrok")
+            self.write_log(
+                "Домен выглядит правильно по форме, но ngrok не смог начать туннель с ним.\n"
+                f"Причина: {detail}\n"
+                "Что сделать: проверь, что домен скопирован из твоего кабинета ngrok, закрой старые туннели и попробуй снова.\n"
+            )
+            return None
         self.ngrok_domain_var.set(domain)
         self.set_step("domain", "done", domain)
-        self.write_log(f"Домен принят: {domain}\n")
+        self.write_log(f"Домен принят и проверен коротким запуском ngrok: {domain}\n")
         return domain
 
     def _step_env(self, domain: str, ngrok_path: str) -> str | None:

@@ -68,6 +68,7 @@ OPENAPI_FILES = [
 ]
 IS_WINDOWS = os.name == "nt"
 VENV_DIR = PROJECT_DIR / ".venv"
+VENV_PYTHON = VENV_DIR / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
 VENV_UVICORN = VENV_DIR / ("Scripts/uvicorn.exe" if IS_WINDOWS else "bin/uvicorn")
 LOCAL_NGROK_EXE = PROJECT_DIR / "tools" / "ngrok" / "ngrok.exe"
 LOCAL_URL = "http://127.0.0.1:8787"
@@ -487,9 +488,9 @@ class ControlPanel:
                 recoverable=True,
             )
         return TunnelFailure(
-            code="process_crashed",
+            code="startup_crashed",
             summary="ngrok завершился до готовности туннеля",
-            recoverable=True,
+            recoverable=False,
         )
 
     def _describe_tunnel_failure(self, failure: TunnelFailure) -> str:
@@ -510,6 +511,8 @@ class ControlPanel:
             return "локальный порт 8787 занят другим процессом."
         if failure.code == "network_temporary":
             return "временный сетевой сбой при подключении к ngrok."
+        if failure.code == "startup_crashed":
+            return "ngrok завершился до готовности. Смотри строки выше: там должен быть ответ ngrok с настоящей причиной."
         return failure.summary
 
     def _find_ngrok(self) -> str | None:
@@ -605,6 +608,8 @@ class ControlPanel:
         match = re.search(r"ngrok\s+version\s+(\d+)", output, flags=re.IGNORECASE)
         if match and int(match.group(1)) < NGROK_MIN_MAJOR_VERSION:
             return False, f"нужен ngrok v3+, найдено: {output}"
+        if not match:
+            return False, f"не смог понять версию ngrok: {output or '(пустой вывод)'}"
         return True, output or "ngrok version OK"
 
     def _ngrok_domain_arg(self, ngrok_path: str, domain: str) -> str:
@@ -742,9 +747,58 @@ foreach ($item in $items) {
                 return command
         return None
 
+    def _venv_health(self) -> tuple[bool, str]:
+        if not VENV_PYTHON.exists():
+            return False, "не найден .venv\\Scripts\\python.exe"
+        if not VENV_UVICORN.exists():
+            return False, "не найден .venv\\Scripts\\uvicorn.exe"
+        try:
+            result = subprocess.run(
+                [
+                    str(VENV_PYTHON),
+                    "-c",
+                    (
+                        "import sys; "
+                        "print(f'python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'); "
+                        "sys.exit(13) if sys.version_info[:2] != (3, 13) else None; "
+                        "import fastapi, pydantic, uvicorn; "
+                        "print('ok')"
+                    ),
+                ],
+                cwd=PROJECT_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=20,
+                creationflags=_windows_no_window_flags(),
+            )
+        except Exception as exc:
+            return False, f"не смог проверить .venv: {exc}"
+        output = (result.stdout or "").strip()
+        if result.returncode == 13:
+            return False, f"нужен Python 3.13 внутри .venv, сейчас: {output or '(версия не определена)'}"
+        if result.returncode != 0 or "ok" not in output:
+            return False, output or f"проверка .venv завершилась с кодом {result.returncode}"
+        return True, "ok"
+
     def ensure_uvicorn(self) -> bool:
-        if VENV_UVICORN.exists():
+        venv_ok, venv_detail = self._venv_health()
+        if venv_ok:
             return True
+        if VENV_DIR.exists():
+            self.write_log(
+                "Нашёл .venv, но оно не проходит проверку и будет пересобрано.\n"
+                f"Причина: {venv_detail}\n"
+            )
+            try:
+                shutil.rmtree(VENV_DIR)
+            except OSError as exc:
+                self.write_log(
+                    "Не смог удалить старое .venv.\n"
+                    f"Техническая причина: {exc}\n"
+                    "Закрой старые окна панели, терминалы, VS Code или процессы Python и попробуй снова.\n"
+                )
+                return False
         python_cmd = self._resolve_python_command()
         if python_cmd is None:
             self.write_log(

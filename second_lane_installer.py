@@ -52,6 +52,7 @@ NGROK_DIRECT_ZIP_URL = "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-win
 NGROK_AUTHTOKEN_URL = "https://dashboard.ngrok.com/tunnels/authtokens"
 NGROK_DOMAINS_URL = "https://dashboard.ngrok.com/domains"
 WINDOWS_GUIDE_URL = PROJECT_DIR / "docs" / "WINDOWS_FIRST_START.md"
+NGROK_MIN_MAJOR_VERSION = 3
 WINGET_NGROK_COMMAND = [
     "winget",
     "install",
@@ -475,6 +476,28 @@ def is_ngrok_exe(path: Path) -> bool:
         return False
 
 
+def ngrok_version_supported(path: str) -> tuple[bool, str]:
+    try:
+        code, output = run_capture([path, "version"], timeout=8)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"не смог проверить версию ngrok: {exc}"
+    if code != 0:
+        return False, output or f"ngrok version завершился с кодом {code}"
+    match = re.search(r"ngrok\s+version\s+(\d+)", output, flags=re.IGNORECASE)
+    if match and int(match.group(1)) < NGROK_MIN_MAJOR_VERSION:
+        return False, f"нужен ngrok v3+, найдено: {output}"
+    return True, output or "ngrok version OK"
+
+
+def usable_ngrok_path(path: Path) -> str | None:
+    if not is_ngrok_exe(path):
+        return None
+    ok, _detail = ngrok_version_supported(str(path))
+    if not ok:
+        return None
+    return str(path)
+
+
 def configured_ngrok_path() -> str:
     env_values = parse_env_text(existing_env_text())
     return normalize_exe_path(env_values.get("NGROK_PATH", ""))
@@ -516,14 +539,21 @@ def find_ngrok_path(preferred_path: str = "") -> str | None:
         cleaned = normalize_exe_path(raw)
         if cleaned:
             candidate = Path(cleaned).expanduser()
-            if is_ngrok_exe(candidate):
-                return str(candidate)
+            usable = usable_ngrok_path(candidate)
+            if usable:
+                return usable
+    local = usable_ngrok_path(LOCAL_NGROK_EXE)
+    if local:
+        return local
     found = shutil.which("ngrok")
     if found:
-        return found
+        usable = usable_ngrok_path(Path(found))
+        if usable:
+            return usable
     for candidate in iter_common_ngrok_candidates():
-        if is_ngrok_exe(candidate):
-            return str(candidate)
+        usable = usable_ngrok_path(candidate)
+        if usable:
+            return usable
     return None
 
 

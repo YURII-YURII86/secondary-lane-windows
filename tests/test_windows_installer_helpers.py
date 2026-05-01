@@ -47,12 +47,52 @@ def test_ngrok_domain_validation_rejects_placeholders_and_bad_text() -> None:
     assert not installer.ngrok_domain_is_valid("https://")
 
 
+def test_installer_rejects_ngrok_v2(monkeypatch, tmp_path: Path) -> None:
+    ngrok = tmp_path / "ngrok.exe"
+    ngrok.write_text("fake", "utf-8")
+
+    monkeypatch.setattr(installer, "run_capture", lambda command, timeout=20: (0, "ngrok version 2.3.41"))
+
+    assert installer.usable_ngrok_path(ngrok) is None
+
+
 def test_control_panel_normalizes_ngrok_domain_before_tunnel_start() -> None:
     import gpts_agent_control as control
 
     assert control.normalize_ngrok_domain("https://Team-Name.ngrok-free.app/") == "team-name.ngrok-free.app"
     panel = control.ControlPanel.__new__(control.ControlPanel)
     assert panel.ngrok_domain_is_placeholder("https://your-domain.ngrok-free.app/")
+
+
+def test_control_panel_classifies_common_ngrok_startup_failures() -> None:
+    import gpts_agent_control as control
+
+    panel = control.ControlPanel.__new__(control.ControlPanel)
+
+    old_cli = panel._classify_ngrok_output("ERROR: unknown flag: --url")
+    assert old_cli.code == "ngrok_cli_incompatible"
+    assert not old_cli.recoverable
+
+    busy_domain = panel._classify_ngrok_output("ERROR: the endpoint is already online")
+    assert busy_domain.code == "domain_in_use"
+    assert not busy_domain.recoverable
+
+    missing_auth = panel._classify_ngrok_output("ERROR: authtoken is required")
+    assert missing_auth.code == "auth_failed"
+    assert not missing_auth.recoverable
+
+
+def test_control_panel_uses_domain_flag_for_older_ngrok_help(monkeypatch) -> None:
+    import subprocess
+    import gpts_agent_control as control
+
+    class _Completed:
+        stdout = "Usage: ngrok http [address] [--domain string]"
+
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: _Completed())
+
+    panel = control.ControlPanel.__new__(control.ControlPanel)
+    assert panel._ngrok_domain_arg("ngrok.exe", "demo.ngrok-free.app") == "--domain=demo.ngrok-free.app"
 
 
 def test_step_env_creates_env_with_windows_ngrok_path() -> None:

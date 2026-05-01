@@ -92,12 +92,17 @@ NGROK_BLOCKED_IP_ERROR = "ERR_NGROK_9040"
 PUBLIC_CHECK_INTERVAL_SEC = 25
 PUBLIC_CHECK_MAX_FAILURES = 2
 RECOVERY_BACKOFF_STEPS_SEC = [3, 10, 30]
+NGROK_MIN_MAJOR_VERSION = 3
 
 
 def normalize_ngrok_domain(raw: str) -> str:
     cleaned = raw.strip()
     cleaned = re.sub(r"^https?://", "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip().strip("/").lower()
+
+
+def _windows_no_window_flags() -> int:
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0) if IS_WINDOWS else 0
 
 
 @dataclass
@@ -442,6 +447,27 @@ class ControlPanel:
                 summary="ngrok отклонил токен или доступ аккаунта",
                 recoverable=False,
             )
+        if (
+            "authtoken" in lowered
+            and ("not configured" in lowered or "required" in lowered or "sign up" in lowered)
+        ):
+            return TunnelFailure(
+                code="auth_failed",
+                summary="ngrok не видит сохранённый authtoken",
+                recoverable=False,
+            )
+        if "unknown flag" in lowered or "flag provided but not defined" in lowered or "unknown shorthand flag" in lowered:
+            return TunnelFailure(
+                code="ngrok_cli_incompatible",
+                summary="найден старый или несовместимый ngrok.exe",
+                recoverable=False,
+            )
+        if "already online" in lowered or "already in use" in lowered or "is already bound" in lowered:
+            return TunnelFailure(
+                code="domain_in_use",
+                summary="этот ngrok-домен уже занят другим запущенным туннелем",
+                recoverable=False,
+            )
         if "reserved domain" in lowered or "domain" in lowered and ("invalid" in lowered or "not found" in lowered):
             return TunnelFailure(
                 code="domain_invalid",
@@ -474,6 +500,10 @@ class ControlPanel:
             )
         if failure.code == "auth_failed":
             return "ngrok не принял токен или права аккаунта."
+        if failure.code == "ngrok_cli_incompatible":
+            return "найден старый или несовместимый ngrok.exe. Запусти установщик и выбери/поставь свежий ngrok."
+        if failure.code == "domain_in_use":
+            return "этот ngrok-домен уже занят другим запущенным туннелем. Закрой старые окна Second Lane/ngrok или перезагрузи Windows."
         if failure.code == "domain_invalid":
             return "ngrok не смог использовать домен из .env."
         if failure.code == "port_busy":
@@ -484,17 +514,36 @@ class ControlPanel:
 
     def _find_ngrok(self) -> str | None:
         """Return full path to ngrok, checking PATH and common install locations."""
-        configured_path = self.load_env().get("NGROK_PATH", "").strip().strip("'\"")
-        if configured_path:
-            candidate = Path(configured_path).expanduser()
+        def usable(path_text: str, source: str) -> str | None:
+            if not path_text:
+                return None
             try:
-                if candidate.is_file() and candidate.name.lower() == "ngrok.exe":
-                    return str(candidate)
+                candidate = Path(path_text).expanduser()
+                if not candidate.is_file() or candidate.name.lower() != "ngrok.exe":
+                    return None
             except OSError:
-                pass
+                return None
+            ok, detail = self._ngrok_version_supported(str(candidate))
+            if ok:
+                if source:
+                    self.write_log(f"ngrok найден ({source}): {candidate}\n")
+                return str(candidate)
+            self.write_log(f"Пропускаю неподходящий ngrok ({source or 'путь'}): {candidate}\n{detail}\n")
+            return None
+
+        configured_path = self.load_env().get("NGROK_PATH", "").strip().strip("'\"")
+        configured = usable(configured_path, "NGROK_PATH")
+        if configured:
+            return configured
+
+        local = usable(str(LOCAL_NGROK_EXE), "локальная копия проекта")
+        if local:
+            return local
+
         found = shutil.which("ngrok")
-        if found:
-            return found
+        found_usable = usable(found or "", "PATH")
+        if found_usable:
+            return found_usable
         if IS_WINDOWS:
             # WinGet installs to AppData\Local\Microsoft\WinGet\Links — not always in PATH
             # of child processes spawned from Explorer. Check explicitly.
@@ -502,7 +551,6 @@ class ControlPanel:
             _pf  = os.environ.get("ProgramFiles", r"C:\Program Files")
             _up  = os.environ.get("USERPROFILE", "")
             candidates = [
-                LOCAL_NGROK_EXE,
                 Path(_lad) / "Microsoft" / "WinGet" / "Links" / "ngrok.exe",
                 Path(_lad) / "ngrok" / "ngrok.exe",
                 Path(_pf)  / "ngrok" / "ngrok.exe",
@@ -511,12 +559,9 @@ class ControlPanel:
                 Path(_up) / "Downloads" / "ngrok.exe",
             ]
             for c in candidates:
-                try:
-                    if c.exists():
-                        self.write_log(f"ngrok найден вне PATH: {c}\n")
-                        return str(c)
-                except Exception:
-                    pass
+                candidate = usable(str(c), "частое место Windows")
+                if candidate:
+                    return candidate
             for root in (
                 Path(_lad) / "Microsoft" / "WinGet" / "Packages",
                 Path(_pf) / "WinGet" / "Packages",
@@ -525,21 +570,111 @@ class ControlPanel:
                     if not root.exists():
                         continue
                     for c in root.glob("**/ngrok.exe"):
-                        if c.is_file():
-                            self.write_log(f"ngrok найден поиском: {c}\n")
-                            return str(c)
+                        candidate = usable(str(c), "поиск WinGet")
+                        if candidate:
+                            return candidate
                 except Exception:
                     pass
             downloads = Path(_up) / "Downloads"
             try:
                 if downloads.exists():
                     for c in downloads.glob("ngrok*/ngrok.exe"):
-                        if c.is_file():
-                            self.write_log(f"ngrok найден поиском: {c}\n")
-                            return str(c)
+                        candidate = usable(str(c), "Downloads")
+                        if candidate:
+                            return candidate
             except Exception:
                 pass
         return None
+
+    def _ngrok_version_supported(self, ngrok_path: str) -> tuple[bool, str]:
+        try:
+            result = subprocess.run(
+                [ngrok_path, "version"],
+                cwd=PROJECT_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=8,
+                creationflags=_windows_no_window_flags(),
+            )
+        except Exception as exc:
+            return False, f"не смог проверить версию ngrok: {exc}"
+        output = (result.stdout or "").strip()
+        if result.returncode != 0:
+            return False, output or f"ngrok version завершился с кодом {result.returncode}"
+        match = re.search(r"ngrok\s+version\s+(\d+)", output, flags=re.IGNORECASE)
+        if match and int(match.group(1)) < NGROK_MIN_MAJOR_VERSION:
+            return False, f"нужен ngrok v3+, найдено: {output}"
+        return True, output or "ngrok version OK"
+
+    def _ngrok_domain_arg(self, ngrok_path: str, domain: str) -> str:
+        try:
+            result = subprocess.run(
+                [ngrok_path, "http", "--help"],
+                cwd=PROJECT_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=8,
+                creationflags=_windows_no_window_flags(),
+            )
+            help_text = result.stdout or ""
+        except Exception:
+            help_text = ""
+        if "--url" in help_text:
+            return f"--url={domain}"
+        if "--domain" in help_text:
+            return f"--domain={domain}"
+        return f"--url={domain}"
+
+    def _format_ngrok_recent_output(self, lines: list[str]) -> str:
+        cleaned: list[str] = []
+        for line in lines[-12:]:
+            short = line.strip()
+            if not short:
+                continue
+            if len(short) > 500:
+                short = short[:500] + "..."
+            cleaned.append(short)
+        return "\n".join(cleaned)
+
+    def _stop_stale_ngrok_tunnels(self, domain: str) -> None:
+        if not IS_WINDOWS or not shutil.which("powershell"):
+            return
+        script = r"""
+$domain = $args[0]
+$escaped = [regex]::Escape($domain)
+$items = Get-CimInstance Win32_Process -Filter "Name = 'ngrok.exe'" -ErrorAction SilentlyContinue |
+  Where-Object {
+    $_.CommandLine -and (
+      $_.CommandLine -match $escaped -or
+      ($_.CommandLine -match '\bhttp\b' -and $_.CommandLine -match '\b8787\b')
+    )
+  }
+foreach ($item in $items) {
+  try {
+    Stop-Process -Id $item.ProcessId -Force -ErrorAction Stop
+    Write-Output ("stopped " + $item.ProcessId + " " + $item.CommandLine)
+  } catch {
+    Write-Output ("failed " + $item.ProcessId + " " + $_.Exception.Message)
+  }
+}
+"""
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script, domain],
+                cwd=PROJECT_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=8,
+                creationflags=_windows_no_window_flags(),
+            )
+        except Exception:
+            return
+        output = (result.stdout or "").strip()
+        if output:
+            self.write_log("Закрыл старые процессы ngrok для этого домена/порта:\n" + output + "\n")
 
     def _preflight_tunnel_check(self) -> tuple[bool, str]:
         ngrok_path = self._find_ngrok()
@@ -1008,12 +1143,16 @@ class ControlPanel:
         self.write_log(f"Запускаю ngrok туннель → {public_url} ...\n")
 
         ngrok_cmd = self._find_ngrok() or "ngrok"
+        self._stop_stale_ngrok_tunnels(domain)
+        domain_arg = self._ngrok_domain_arg(ngrok_cmd, domain)
+        self.write_log(f"Команда ngrok использует параметр домена: {domain_arg.split('=', 1)[0]}\n")
         self.tunnel_proc = subprocess.Popen(
-            [ngrok_cmd, "http", "8787", f"--url={domain}", "--log=stdout", "--log-format=logfmt"],
+            [ngrok_cmd, "http", "8787", domain_arg, "--log=stdout", "--log-format=logfmt"],
             cwd=PROJECT_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            creationflags=_windows_no_window_flags(),
         )
         threading.Thread(target=self._stream_ngrok, args=(self.tunnel_proc,), daemon=True).start()
 
@@ -1066,6 +1205,9 @@ class ControlPanel:
             self.last_url = None
             self.tunnel_url.set("Туннель: ошибка запуска")
             self.write_log(f"Туннель не поднялся: {detail}\n")
+            recent_output = self._format_ngrok_recent_output(captured_lines)
+            if recent_output:
+                self.write_log("Что ответил ngrok перед выходом:\n" + recent_output + "\n")
             self._schedule_tunnel_recovery(self._last_tunnel_failure)
             return
         if tunnel_ready or self.last_url:
